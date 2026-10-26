@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Node / dashboard
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Simulation artifacts
+runs/
+*.jsonl
+*.parquet
+*.duckdb
+!examples/*.json
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store

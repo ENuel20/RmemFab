@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ENuel20/RmemFab/SPECS/trace.schema.json",
+  "title": "RmemFab Trace Record",
+  "description": "One newline-delimited JSON record: either a header or a memory operation.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/header"
+    },
+    {
+      "$ref": "#/$defs/record"
+    }
+  ],
+  "$defs": {
+    "header": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "trace_version",
+        "source"
+      ],
+      "properties": {
+        "type": {
+          "const": "header"
+        },
+        "trace_version": {
+          "const": "0.1"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "context_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dtype": {
+          "type": "string"
+        },
+        "clock_unit": {
+          "enum": [
+            "ns"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "ts_ns",
+        "op",
+        "page_id",
+        "bytes"
+      ],
+      "properties": {
+        "ts_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "op": {
+          "enum": [
+            "alloc",
+            "free",
+            "read",
+            "write",
+            "migrate",
+            "prefetch",
+            "evict"
+          ]
+        },
+        "page_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node": {
+          "type": "string"
+        },
+        "tier": {
+          "enum": [
+            "local",
+            "remote",
+            "cache"
+          ]
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "tenant_id": {
+          "type": "string"
+        },
+        "latency_ns": {
+          "type": "number",
+          "minimum": 0
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

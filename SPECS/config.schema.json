@@ -1,0 +1,634 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ENuel20/RmemFab/SPECS/config.schema.json",
+  "title": "RmemFab Scenario",
+  "description": "A reproducible simulation scenario: nodes, memory tiers, fabric, workload, policy, faults, and output settings.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "name",
+    "seed",
+    "duration_ns",
+    "nodes",
+    "fabric",
+    "workload",
+    "policy"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": "0.1"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "duration_ns": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "warmup_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "page_size_bytes": {
+      "type": "integer",
+      "minimum": 4096
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/node"
+      }
+    },
+    "fabric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "links"
+      ],
+      "properties": {
+        "links": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/link"
+          }
+        }
+      }
+    },
+    "workload": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/syntheticWorkload"
+        },
+        {
+          "$ref": "#/$defs/traceWorkload"
+        }
+      ]
+    },
+    "policy": {
+      "$ref": "#/$defs/policy"
+    },
+    "faults": {
+      "$ref": "#/$defs/faults"
+    },
+    "metrics": {
+      "$ref": "#/$defs/metrics"
+    },
+    "output": {
+      "$ref": "#/$defs/output"
+    },
+    "cost_model": {
+      "$ref": "#/$defs/costModel"
+    }
+  },
+  "$defs": {
+    "memoryTier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capacity_bytes",
+        "latency_ns",
+        "bandwidth_bytes_per_ns"
+      ],
+      "properties": {
+        "capacity_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "latency_ns": {
+          "type": "number",
+          "minimum": 0
+        },
+        "bandwidth_bytes_per_ns": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "page_size_bytes": {
+          "type": "integer",
+          "minimum": 4096
+        },
+        "read_latency_factor": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "write_latency_factor": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cost_per_byte_second": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "compute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accelerator": {
+          "type": "string"
+        },
+        "accelerators": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "accelerator_memory_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokens_per_second": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "role": {
+          "enum": [
+            "compute",
+            "memory"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "local_memory": {
+          "$ref": "#/$defs/memoryTier"
+        },
+        "remote_memory": {
+          "$ref": "#/$defs/memoryTier"
+        },
+        "compute": {
+          "$ref": "#/$defs/compute"
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "from",
+        "to",
+        "latency_ns",
+        "bandwidth_bytes_per_ns"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "latency_ns": {
+          "type": "number",
+          "minimum": 0
+        },
+        "bandwidth_bytes_per_ns": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "in_flight_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "queue_depth_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bidirectional": {
+          "type": "boolean"
+        },
+        "loss_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      }
+    },
+    "phaseMix": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prefill": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "decode": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "family": {
+          "type": "string"
+        },
+        "layers": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "attention_heads": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kv_heads": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "head_dim": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hidden_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "dtype_bytes": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "experts": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expert_size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "popularity_distribution": {
+          "enum": [
+            "uniform",
+            "zipf",
+            "custom"
+          ]
+        },
+        "popularity_skew": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "requests": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "arrival_rate_per_second": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "prompt_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generated_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "phase_mix": {
+          "$ref": "#/$defs/phaseMix"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "syntheticWorkload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "profile"
+      ],
+      "properties": {
+        "type": {
+          "const": "synthetic"
+        },
+        "profile": {
+          "enum": [
+            "kv_cache_decode",
+            "prefill",
+            "sparse_attention",
+            "moe",
+            "mixed"
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/model"
+        },
+        "requests": {
+          "$ref": "#/$defs/requests"
+        },
+        "sparsity": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "window_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "global_tokens": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "traceWorkload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "path"
+      ],
+      "properties": {
+        "type": {
+          "const": "trace"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "enum": [
+            "jsonl"
+          ]
+        },
+        "sort": {
+          "type": "boolean"
+        },
+        "round_bytes": {
+          "type": "boolean"
+        },
+        "time_scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "local_only",
+            "swap_remote",
+            "hot_cold",
+            "frequency_aware",
+            "predictive_prefetch",
+            "cost_aware"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "nodeFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time_ns",
+        "node"
+      ],
+      "properties": {
+        "time_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "node": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repair_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "linkDegradation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_ns",
+        "end_ns",
+        "link"
+      ],
+      "properties": {
+        "start_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "link": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bandwidth_factor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "latency_factor": {
+          "type": "number",
+          "minimum": 1
+        }
+      }
+    },
+    "packetLoss": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      }
+    },
+    "failureProcess": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mtbf_ns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "repair_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "distribution": {
+          "enum": [
+            "exponential",
+            "weibull"
+          ]
+        },
+        "shape": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "faults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "node_failures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nodeFailure"
+          }
+        },
+        "node_failure_process": {
+          "$ref": "#/$defs/failureProcess"
+        },
+        "link_degradations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/linkDegradation"
+          }
+        },
+        "packet_loss": {
+          "$ref": "#/$defs/packetLoss"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "percentiles": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 100
+          },
+          "uniqueItems": true
+        },
+        "sample_interval_ns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "warmup_ns": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "costModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capacity_per_gib_second": {
+          "type": "number",
+          "minimum": 0
+        },
+        "transfer_per_gib": {
+          "type": "number",
+          "minimum": 0
+        },
+        "migration_per_gib": {
+          "type": "number",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "enum": [
+            "jsonl",
+            "parquet"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "include_event_log": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

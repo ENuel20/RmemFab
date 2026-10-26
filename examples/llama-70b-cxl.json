@@ -1,0 +1,176 @@
+{
+  "$schema": "../SPECS/config.schema.json",
+  "version": "0.1",
+  "name": "llama-70b-cxl",
+  "description": "Four compute nodes serving Llama-3-70B with a shared CXL-attached memory pool. Compares a hot/cold placement policy against local-only and swap baselines.",
+  "seed": 42,
+  "duration_ns": 60000000000,
+  "warmup_ns": 5000000000,
+  "page_size_bytes": 2097152,
+  "nodes": [
+    {
+      "id": "node-0",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 549755813888,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-1",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 549755813888,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-2",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 549755813888,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-3",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 549755813888,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "remote-pool",
+      "role": "memory",
+      "remote_memory": {
+        "capacity_bytes": 4398046511104,
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48
+      }
+    }
+  ],
+  "fabric": {
+    "links": [
+      {
+        "id": "node-0-cxl",
+        "from": "node-0",
+        "to": "remote-pool",
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "in_flight_bytes": 16777216,
+        "queue_depth_bytes": 67108864,
+        "bidirectional": true
+      },
+      {
+        "id": "node-1-cxl",
+        "from": "node-1",
+        "to": "remote-pool",
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "in_flight_bytes": 16777216,
+        "queue_depth_bytes": 67108864,
+        "bidirectional": true
+      },
+      {
+        "id": "node-2-cxl",
+        "from": "node-2",
+        "to": "remote-pool",
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "in_flight_bytes": 16777216,
+        "queue_depth_bytes": 67108864,
+        "bidirectional": true
+      },
+      {
+        "id": "node-3-cxl",
+        "from": "node-3",
+        "to": "remote-pool",
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "in_flight_bytes": 16777216,
+        "queue_depth_bytes": 67108864,
+        "bidirectional": true
+      }
+    ]
+  },
+  "workload": {
+    "type": "synthetic",
+    "profile": "kv_cache_decode",
+    "model": {
+      "name": "llama-3-70b",
+      "family": "llama",
+      "layers": 80,
+      "attention_heads": 64,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "dtype_bytes": 2
+    },
+    "requests": {
+      "arrival_rate_per_second": 8,
+      "concurrency": 16,
+      "prompt_tokens": 4096,
+      "generated_tokens": 512,
+      "phase_mix": {
+        "prefill": 0.1,
+        "decode": 0.9
+      }
+    }
+  },
+  "policy": {
+    "name": "hot_cold",
+    "params": {
+      "hot_threshold": 8,
+      "cold_threshold": 1,
+      "tick_ns": 1000000,
+      "min_residency_ns": 10000000,
+      "max_migrations_per_tick": 64
+    }
+  },
+  "faults": {
+    "node_failures": [],
+    "link_degradations": [],
+    "packet_loss": {
+      "enabled": false,
+      "ppm": 0
+    }
+  },
+  "metrics": {
+    "percentiles": [
+      50,
+      95,
+      99
+    ],
+    "sample_interval_ns": 100000000,
+    "warmup_ns": 5000000000
+  },
+  "output": {
+    "format": "jsonl",
+    "path": "runs/llama-70b-cxl",
+    "include_event_log": true
+  }
+}

@@ -1,0 +1,292 @@
+{
+  "$schema": "../SPECS/config.schema.json",
+  "version": "0.1",
+  "name": "moe-remote-tiering",
+  "description": "Eight compute nodes running a Mixtral-style MoE workload over RDMA remote memory, with a node failure and a degraded link to exercise fault behavior.",
+  "seed": 7,
+  "duration_ns": 120000000000,
+  "warmup_ns": 10000000000,
+  "page_size_bytes": 2097152,
+  "nodes": [
+    {
+      "id": "node-0",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 274877906944,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300
+      },
+      "compute": {
+        "accelerator": "A100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-1",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 274877906944,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300
+      },
+      "compute": {
+        "accelerator": "A100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-2",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 274877906944,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300
+      },
+      "compute": {
+        "accelerator": "A100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-3",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 274877906944,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300
+      },
+      "compute": {
+        "accelerator": "A100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-4",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 274877906944,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300
+      },
+      "compute": {
+        "accelerator": "A100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-5",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 274877906944,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300
+      },
+      "compute": {
+        "accelerator": "A100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-6",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 274877906944,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300
+      },
+      "compute": {
+        "accelerator": "A100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "node-7",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 274877906944,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300
+      },
+      "compute": {
+        "accelerator": "A100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920
+      }
+    },
+    {
+      "id": "remote-pool",
+      "role": "memory",
+      "remote_memory": {
+        "capacity_bytes": 8796093022208,
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25
+      }
+    }
+  ],
+  "fabric": {
+    "links": [
+      {
+        "id": "node-0-rdma",
+        "from": "node-0",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true
+      },
+      {
+        "id": "node-1-rdma",
+        "from": "node-1",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true
+      },
+      {
+        "id": "node-2-rdma",
+        "from": "node-2",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true
+      },
+      {
+        "id": "node-3-rdma",
+        "from": "node-3",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true
+      },
+      {
+        "id": "node-4-rdma",
+        "from": "node-4",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true
+      },
+      {
+        "id": "node-5-rdma",
+        "from": "node-5",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true
+      },
+      {
+        "id": "node-6-rdma",
+        "from": "node-6",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true
+      },
+      {
+        "id": "node-7-rdma",
+        "from": "node-7",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true
+      }
+    ]
+  },
+  "workload": {
+    "type": "synthetic",
+    "profile": "moe",
+    "model": {
+      "name": "mixtral-8x7b",
+      "family": "mixtral",
+      "layers": 32,
+      "attention_heads": 32,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "dtype_bytes": 2,
+      "experts": 8,
+      "top_k": 2,
+      "expert_size_bytes": 176160768,
+      "popularity_distribution": "zipf",
+      "popularity_skew": 1.1
+    },
+    "requests": {
+      "arrival_rate_per_second": 4,
+      "concurrency": 32,
+      "prompt_tokens": 2048,
+      "generated_tokens": 256,
+      "phase_mix": {
+        "prefill": 0.15,
+        "decode": 0.85
+      }
+    }
+  },
+  "policy": {
+    "name": "frequency_aware",
+    "params": {
+      "history_length": 8,
+      "k": 2,
+      "protect_fraction": 0.6,
+      "migration_watermark": 0.85,
+      "max_migrations_per_tick": 128
+    }
+  },
+  "faults": {
+    "node_failures": [
+      {
+        "time_ns": 45000000000,
+        "node": "node-3",
+        "repair_ns": 5000000000,
+        "reason": "simulated NIC fault"
+      }
+    ],
+    "link_degradations": [
+      {
+        "start_ns": 70000000000,
+        "end_ns": 80000000000,
+        "link": "node-2-rdma",
+        "bandwidth_factor": 0.5,
+        "latency_factor": 2.0
+      }
+    ],
+    "packet_loss": {
+      "enabled": true,
+      "ppm": 10
+    }
+  },
+  "metrics": {
+    "percentiles": [
+      50,
+      90,
+      99
+    ],
+    "sample_interval_ns": 200000000,
+    "warmup_ns": 10000000000
+  },
+  "output": {
+    "format": "parquet",
+    "path": "runs/moe-remote-tiering",
+    "include_event_log": false
+  }
+}
