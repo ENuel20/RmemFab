@@ -31,6 +31,16 @@
       "type": "string",
       "maxLength": 4000
     },
+    "assumptions": {
+      "type": "array",
+      "description": "Explicit modeling assumptions for this scenario. Results should be read together with these statements.",
+      "maxItems": 50,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
     "seed": {
       "type": "integer",
       "minimum": 0,
@@ -98,6 +108,49 @@
     }
   },
   "$defs": {
+    "provenance": {
+      "type": "object",
+      "description": "Where a hardware or model parameter came from. Required for any result used to make an absolute claim.",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "measured",
+            "sourced",
+            "assumed"
+          ],
+          "description": "measured: captured on the target system. sourced: taken from a datasheet, paper, or vendor spec. assumed: a working value chosen for exploration."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "URL, citation, dataset, or internal benchmark identifier."
+        },
+        "method": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "How the value was obtained or fitted, including tooling and workload."
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "ISO date the measurement or source was captured, for example 2026-10-28."
+        },
+        "uncertainty_pct": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Approximate relative uncertainty in percent. Omit when unknown rather than inventing a value."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
     "memoryTier": {
       "type": "object",
       "additionalProperties": false,
@@ -134,6 +187,9 @@
         "cost_per_byte_second": {
           "type": "number",
           "minimum": 0
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
         }
       }
     },
@@ -155,6 +211,9 @@
         "tokens_per_second": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
         }
       }
     },
@@ -241,6 +300,9 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 1000000
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
         }
       }
     },

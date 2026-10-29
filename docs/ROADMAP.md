@@ -11,7 +11,7 @@ RmemFab is built spec-first so the engine, API, and dashboard can proceed indepe
 - Policy interface and comparison protocol.
 - Hardware presets and workload definitions.
 
-**Done when:** schemas validate the example scenarios, and the docs agree on units, terminology, and scope.
+**Done when:** schemas validate the example scenarios, the docs agree on units, terminology, and scope, and [`ACCEPTANCE.md`](ACCEPTANCE.md) is adopted as the executable contract for the first implementation milestone.
 
 ## Phase 1 — Core engine
 

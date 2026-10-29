@@ -1,0 +1,271 @@
+{
+  "$schema": "../SPECS/config.schema.json",
+  "version": "0.1",
+  "name": "policy-prefetch-failure",
+  "description": "Comparison harness for a policy that is expected to help the mean and hurt the tail. Run once with predictive_prefetch and once with hot_cold using the same seed and trace; the hypothesis is that aggressive prefetching lowers mean decode latency but saturates the node-to-pool links and raises p99. This is a hypothesis to verify, not a result. It is not a measured-hardware experiment.",
+  "assumptions": [
+    "Each compute-to-pool link is modeled as an independent byte server. Shared pool service contention is not yet modeled in this revision, so treat absolute queue depths as provisional.",
+    "Aggressive prefetch parameters are deliberately set to expose the failure mode: long lookahead, low confidence threshold, and a high in-flight cap.",
+    "The workload is synthetic KV-cache decode derived from Llama-3-70B geometry, not a captured serving trace.",
+    "Values are starting presets from docs/HARDWARE-MODELS.md. Replace them with measured values before making absolute claims.",
+    "The expected result is conditional: prefetching should win when accesses are predictable and the link is lightly loaded, and lose when prefetch traffic competes with demand."
+  ],
+  "seed": 42,
+  "duration_ns": 60000000000,
+  "warmup_ns": 5000000000,
+  "page_size_bytes": 2097152,
+  "nodes": [
+    {
+      "id": "node-0",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 549755813888,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class.",
+          "date": "2026-10-28"
+        }
+      }
+    },
+    {
+      "id": "node-1",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 549755813888,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class.",
+          "date": "2026-10-28"
+        }
+      }
+    },
+    {
+      "id": "node-2",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 549755813888,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class.",
+          "date": "2026-10-28"
+        }
+      }
+    },
+    {
+      "id": "node-3",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 549755813888,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class.",
+          "date": "2026-10-28"
+        }
+      }
+    },
+    {
+      "id": "remote-pool",
+      "role": "memory",
+      "remote_memory": {
+        "capacity_bytes": 4398046511104,
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+          "method": "CXL.mem class latency and per-port bandwidth; not measured and not fitted to a switch topology.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
+      }
+    }
+  ],
+  "fabric": {
+    "links": [
+      {
+        "id": "node-0-cxl",
+        "from": "node-0",
+        "to": "remote-pool",
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "in_flight_bytes": 16777216,
+        "queue_depth_bytes": 67108864,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+          "method": "One-way latency and sustained bandwidth for a CXL.mem class link; queue and in-flight limits are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
+      },
+      {
+        "id": "node-1-cxl",
+        "from": "node-1",
+        "to": "remote-pool",
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "in_flight_bytes": 16777216,
+        "queue_depth_bytes": 67108864,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+          "method": "One-way latency and sustained bandwidth for a CXL.mem class link; queue and in-flight limits are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
+      },
+      {
+        "id": "node-2-cxl",
+        "from": "node-2",
+        "to": "remote-pool",
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "in_flight_bytes": 16777216,
+        "queue_depth_bytes": 67108864,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+          "method": "One-way latency and sustained bandwidth for a CXL.mem class link; queue and in-flight limits are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
+      },
+      {
+        "id": "node-3-cxl",
+        "from": "node-3",
+        "to": "remote-pool",
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "in_flight_bytes": 16777216,
+        "queue_depth_bytes": 67108864,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+          "method": "One-way latency and sustained bandwidth for a CXL.mem class link; queue and in-flight limits are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
+      }
+    ]
+  },
+  "workload": {
+    "type": "synthetic",
+    "profile": "kv_cache_decode",
+    "model": {
+      "name": "llama-3-70b",
+      "family": "llama",
+      "layers": 80,
+      "attention_heads": 64,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "dtype_bytes": 2
+    },
+    "requests": {
+      "arrival_rate_per_second": 12,
+      "concurrency": 24,
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "phase_mix": {
+        "prefill": 0.05,
+        "decode": 0.95
+      }
+    }
+  },
+  "policy": {
+    "name": "predictive_prefetch",
+    "params": {
+      "confidence_threshold": 0.5,
+      "lookahead_pages": 8,
+      "max_in_flight_prefetches": 256,
+      "prefetch_window_pages": 4,
+      "cancel_on_pressure": false,
+      "stream": "workload"
+    }
+  },
+  "faults": {
+    "node_failures": [],
+    "link_degradations": [],
+    "packet_loss": {
+      "enabled": false,
+      "ppm": 0
+    }
+  },
+  "metrics": {
+    "percentiles": [
+      50,
+      95,
+      99
+    ],
+    "sample_interval_ns": 100000000,
+    "warmup_ns": 5000000000
+  },
+  "output": {
+    "format": "jsonl",
+    "path": "runs/policy-prefetch-failure",
+    "include_event_log": true
+  }
+}
