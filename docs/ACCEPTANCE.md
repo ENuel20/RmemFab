@@ -10,7 +10,7 @@ The commands below are planned CLI/API surfaces. Until they exist, each check is
 
 | ID | Requirement | Primary evidence | Status |
 | :--- | :--- | :--- | :--- |
-| A1 | Quantitative correctness | Closed-form and invariant tests | contract only |
+| A1 | Quantitative correctness | Closed-form, invariant, and overflow tests | contract only |
 | A2 | Configurable assumptions | Provenance audit + sensitivity diff | contract only |
 | A3 | Fair policy comparisons | Comparison guard + seed spread | contract only |
 | A4 | Workload realism | KV formula test + one measured trace | contract only |
@@ -18,6 +18,17 @@ The commands below are planned CLI/API surfaces. Until they exist, each check is
 | A6 | Reproducibility | Byte-identical rerun in CI | contract only |
 | A7 | Decision-oriented interface | Unmoderated user task | contract only |
 | A8 | Show where a policy fails | Paired runs + mechanism explanation | contract only |
+
+## Metric definitions
+
+These definitions are normative. A run that uses a different denominator or transfer unit is not comparable to another run and the comparison guard must reject it.
+
+- **Hit ratio.** `local_hit`, `remote_hit`, and `miss` are fractions of page **read accesses** and must sum to 1.0 within rounding. Allocations, frees, evictions, migrations, prefetches, and background events are not in the denominator. Report `page_allocations` separately. A run that reports `local_hit < 1.0` together with `remote_read = 0` has the wrong denominator, not a real remote hit.
+- **Traffic.** `remote_read` is bytes transferred from remote to local; `remote_write` is bytes transferred from local to remote. `migration` is bytes moved by a policy decision and is a subset of remote traffic when the policy fetches on demand. Report `remote_read_demand` and `remote_read_migration` separately when both exist. `evicted` is bytes removed from a tier; a clean eviction contributes 0 to `remote_write`. Equal values are allowed only when the policy makes them equal by construction, and the summary must state that.
+- **Transfer unit.** `page_size_bytes` is the allocation granularity; `transfer_bytes` is the fabric service unit. They may differ, but the run must report both and link utilization must use `transfer_bytes`. A 4 KiB transfer with 2 MiB pages must be declared, not inferred from the counters.
+- **Warmup.** `latency[all]` includes every sample in `[0, duration_ns)`. `latency[steady_state]` includes only samples in `[warmup_ns, duration_ns)`. When the two are identical, the summary must print both sample counts; identical counts mean no samples fell in the warmup window, not that the filter was skipped.
+- **Throughput.** Requests per second and tokens per second use `duration_ns - warmup_ns` as the denominator and count only requests completed in that window.
+- **Percentiles.** The interpolation method (nearest-rank or linear) is recorded in the manifest and must be identical across compared runs.
 
 ## A1 — Quantitative correctness
 
@@ -79,6 +90,19 @@ rmemfab check --case capacity-accounting
 ```
 
 Pass condition: occupancy never exceeds tier capacity; every allocation, eviction, migration, and free changes occupancy by the exact byte count; a policy request that would overcommit is rejected, evicted, or failed explicitly, never silently granted.
+
+### A1.6 Remote path is exercised
+
+Target commands:
+
+```bash
+rmemfab run examples/phase1-overflow.json --out runs/overflow
+rmemfab summary runs/overflow
+```
+
+The scenario's local tier is deliberately smaller than one request's KV cache, so the pool must be used.
+
+Pass condition: the run completes with `remote_read > 0`, `migration > 0`, and at least one `page_migrate_begin` / `page_migrate_end` pair when event logging is enabled. `local_hit + remote_hit + miss = 1` within rounding, using the read-access denominator from the metric definitions. A run whose local tier cannot hold one request but reports `remote_read = 0` fails; fix the workload, policy, or accounting before accepting Phase 1.
 
 ## A2 — Configurable assumptions and provenance
 
@@ -341,3 +365,5 @@ Share links point at bundles, not at screenshots. The co-pilot reads bundles; it
 5. There is no `explain` implementation or attribution definition beyond this document (A5).
 6. Determinism is specified but not yet proven in CI (A6.1).
 7. The co-pilot eval set does not exist (A5.5).
+8. The first Phase 1 implementation reported `local_hit = 0.666` with `remote_read = 0B`, which suggests allocations were counted in the hit-ratio denominator. The metric definitions are now normative but not yet enforced by the validator or comparison guard.
+9. `examples/llama-70b-cxl.json` fits entirely in local DRAM and never exercises the pool. `examples/phase1-overflow.json` is the minimal overflow check; a realistic long-context pressure scenario still needs to be added.

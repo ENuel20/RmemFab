@@ -196,7 +196,8 @@ RmemFab/
 └── examples/
     ├── llama-70b-cxl.json
     ├── moe-remote-tiering.json
-    └── policy-prefetch-failure.json
+    ├── policy-prefetch-failure.json
+    └── phase1-overflow.json   # deliberately undersized local tier; proves the remote path
 ```
 
 The core engine, API, and dashboard directories will be added as implementation lands. Specs are written first so the engine and UI can be developed independently.

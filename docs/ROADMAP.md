@@ -28,7 +28,7 @@ Deliverables:
 - CLI: `validate`, `run`, `summary`.
 - Unit tests for timing, capacity accounting, and determinism.
 
-**Acceptance criterion:** `rmemfab run examples/llama-70b-cxl.json` completes, produces a run manifest, and two runs with the same seed produce byte-identical metric summaries.
+**Acceptance criterion:** `rmemfab run examples/llama-70b-cxl.json` completes, produces a run manifest, and two runs with the same seed produce byte-identical metric summaries. Separately, `rmemfab run examples/phase1-overflow.json` must report `remote_read > 0` and `migration > 0`; the primary example fits in local DRAM and does not exercise the pool.
 
 ## Phase 2 — Workloads and traces
 
