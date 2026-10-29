@@ -46,12 +46,12 @@ Why lexicographic ordering: it makes tie-breaking explicit and reproducible even
 
 The canonical event set is documented in [`SPECS/events.md`](../SPECS/events.md). At a high level:
 
-- Request lifecycle: `request_arrival`, `prefill_begin`, `decode_step`, `request_complete`.
-- Memory: `page_allocate`, `page_access`, `page_evict`, `page_migrate`, `cache_hit`, `cache_miss`.
-- Fabric: `transfer_begin`, `transfer_complete`, `link_congested`.
-- Prefetch: `prefetch_issue`, `prefetch_complete`, `prefetch_wasted`.
-- Faults: `node_fail`, `node_recover`, `link_degrade`, `packet_loss`.
-- Control: `simulation_end`, `sampling_tick`.
+- Request lifecycle: `request_arrival`, `prefill_begin`, `prefill_end`, `decode_step`, `request_complete`.
+- Memory: `page_allocate`, `page_access`, `page_hit`, `page_miss`, `page_evict`, `page_migrate_begin`, `page_migrate_end`, `page_free`.
+- Fabric: `transfer_begin`, `transfer_complete`, `link_congested`, `link_degraded`, `link_restored`, `transfer_dropped`.
+- Prefetch: `prefetch_issue`, `prefetch_complete`, `prefetch_used`, `prefetch_wasted`.
+- Faults: `node_fail`, `node_recover`, `fault_injected`.
+- Control: `run_start`, `sampling_tick`, `run_end`, `metric_snapshot`.
 
 ## Memory access timing
 
