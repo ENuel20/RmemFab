@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RmemFab — Engineer Lifecycle Explorer</title>
+<style>
+  :root{
+    --bg:#07090c;
+    --bg2:#0a0e13;
+    --panel:#0d1319;
+    --panel2:#0f171f;
+    --line:#1c2733;
+    --line2:#26333f;
+    --text:#dce6ef;
+    --muted:#8a99a8;
+    --dim:#5d6b79;
+    --acc:#6ee7d7;
+    --acc-dim:rgba(110,231,215,.14);
+    --amber:#f5b544;
+    --amber-dim:rgba(245,181,68,.12);
+    --red:#f87171;
+    --blue:#7aa2ff;
+    --green:#8fd6a8;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:
+      radial-gradient(900px 500px at 15% -10%, rgba(110,231,215,.07), transparent 60%),
+      radial-gradient(700px 400px at 95% 0%, rgba(122,162,255,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+    background-size:48px 48px;
+    mask-image:linear-gradient(180deg, rgba(0,0,0,.7), transparent 80%);
+    z-index:0;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+  a{color:var(--acc);text-decoration:none}
+  a:hover{text-decoration:underline}
+  h1,h2,h3,h4{line-height:1.15;letter-spacing:-.02em;margin:0}
+  p{margin:0}
+  ::selection{background:rgba(110,231,215,.25)}
+
+  .nav{
+    position:sticky;top:0;z-index:50;
+    border-bottom:1px solid var(--line);
+    background:rgba(7,9,12,.82);
+    backdrop-filter:blur(12px);
+  }
+  .nav-in{max-width:1180px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:20px}
+  .brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13px;letter-spacing:.06em;color:var(--text)}
+  .brand .mark{width:18px;height:18px;border:1px solid var(--acc);border-radius:4px;display:grid;place-items:center;color:var(--acc);font-size:10px}
+  .nav-links{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+  .nav-links a{
+    font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--dim);
+    padding:6px 9px;border-radius:5px;text-decoration:none;text-transform:uppercase;
+  }
+  .nav-links a:hover{color:var(--text);background:#101820;text-decoration:none}
+
+  section{padding:72px 0;border-bottom:1px solid rgba(28,39,51,.6);scroll-margin-top:58px}
+  .kicker{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--acc);display:flex;align-items:center;gap:10px;margin-bottom:18px;
+  }
+  .kicker::before{content:"";width:22px;height:1px;background:var(--acc);display:inline-block}
+  .section-head{max-width:760px;margin-bottom:38px}
+  .section-head h2{font-size:clamp(26px,3vw,36px);margin-bottom:12px}
+  .section-head p{color:var(--muted);font-size:16px}
+
+  .hero{padding:76px 0 60px;border-bottom:1px solid var(--line)}
+  .hero-grid{display:grid;grid-template-columns:1.35fr .9fr;gap:56px;align-items:start}
+  .hero h1{font-size:clamp(34px,4.6vw,58px);max-width:16ch;margin-bottom:20px}
+  .hero h1 em{font-style:normal;color:var(--acc)}
+  .hero .lead{color:var(--muted);font-size:17px;max-width:56ch}
+  .hero .flag{
+    display:inline-flex;align-items:center;gap:8px;margin-top:26px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--amber);border:1px solid rgba(245,181,68,.3);background:var(--amber-dim);
+    padding:6px 10px;border-radius:4px;
+  }
+  .facts{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .fact{background:var(--panel);padding:14px 16px}
+  .fact .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .fact .v{font-size:13px;color:var(--text)}
+  .fact .v span{color:var(--muted)}
+
+  .model{display:grid;grid-template-columns:1fr 42px 1fr 42px 1fr;align-items:stretch;gap:0}
+  .mbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
+  .mbox .n{font-family:var(--mono);font-size:10px;color:var(--acc);letter-spacing:.14em;margin-bottom:8px}
+  .mbox h3{font-size:16px;margin-bottom:8px}
+  .mbox p{font-size:13px;color:var(--muted)}
+  .mflow{display:grid;place-items:center;color:var(--dim);font-family:var(--mono);font-size:10px;text-align:center;letter-spacing:.08em}
+  .mflow span{display:block}
+  .notsthis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:22px}
+  .notsthis div{
+    border:1px dashed var(--line2);border-radius:8px;padding:10px 14px;
+    font-family:var(--mono);font-size:11px;color:var(--dim);
+  }
+  .notsthis div b{color:var(--muted);font-weight:600}
+  .persona{
+    margin-top:22px;display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:start;
+    border-top:1px solid var(--line);padding-top:20px;
+  }
+  .persona .who{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);padding-top:3px}
+  .persona p{font-size:14px;color:#b3c3d2;max-width:78ch}
+  .persona p b{color:var(--text);font-weight:600}
+
+  .life-top{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:28px;flex-wrap:wrap}
+  .loop{display:flex;flex-wrap:wrap;gap:5px}
+  .loop button{
+    font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--dim);background:#0b1117;border:1px solid var(--line);border-radius:99px;
+    padding:5px 10px;cursor:pointer;transition:.15s;white-space:nowrap;
+  }
+  .loop button:hover{color:var(--text);border-color:var(--line2)}
+  .loop button.active{color:#06110f;background:var(--acc);border-color:var(--acc);font-weight:600}
+  .loop button .i{opacity:.55;margin-right:5px}
+
+  .life{display:grid;grid-template-columns:218px 1fr;gap:26px;align-items:start}
+  .rail{position:sticky;top:74px;display:grid;gap:2px}
+  .rail-btn{
+    display:flex;align-items:baseline;gap:9px;text-align:left;width:100%;
+    background:none;border:0;border-left:2px solid var(--line);border-radius:0 6px 6px 0;
+    padding:8px 10px;color:var(--dim);font-family:var(--sans);font-size:13px;cursor:pointer;
+    transition:.15s;
+  }
+  .rail-btn:hover{color:var(--muted);background:#0c1218}
+  .rail-btn .num{font-family:var(--mono);font-size:10px;color:#46525e;min-width:18px}
+  .rail-btn.active{color:var(--text);background:linear-gradient(90deg,rgba(110,231,215,.08),transparent);border-left-color:var(--acc)}
+  .rail-btn.active .num{color:var(--acc)}
+  .rail-foot{margin-top:12px;padding:10px 10px 0;border-top:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--dim);line-height:1.6}
+
+  .stage{display:none;animation:fade .28s ease}
+  .stage.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .stage-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .stage-eyebrow .t{color:var(--amber)}
+  .stage h3{font-size:clamp(22px,2.5vw,30px);margin-bottom:16px;max-width:24ch}
+  .thought{
+    border-left:2px solid var(--acc);padding:2px 0 2px 16px;margin:0 0 24px;
+    color:#b9cad8;font-size:15.5px;font-style:italic;max-width:62ch;
+  }
+  .thought::before{content:"“";color:var(--acc);font-style:normal;margin-right:1px}
+  .thought::after{content:"”";color:var(--acc);font-style:normal;margin-left:1px}
+  .stage-grid{display:grid;grid-template-columns:1fr;gap:22px}
+  .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:start}
+  .note h4{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--dim);margin-bottom:7px;
+  }
+  .note ul{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+  .note li{position:relative;padding-left:14px;font-size:13px;color:var(--muted);line-height:1.5}
+  .note li::before{content:"";position:absolute;left:0;top:.6em;width:4px;height:4px;border-radius:1px;background:var(--line2)}
+  .note.hood ul li::before{background:var(--acc);opacity:.5}
+  .note.hood{margin-top:0;border:0;border-left:2px solid rgba(110,231,215,.5);background:transparent;border-radius:0;padding:0 0 0 12px}
+  .note.hood h4{color:var(--acc);opacity:.8}
+
+  .wf{border:1px solid var(--line2);border-radius:10px;background:linear-gradient(180deg,#0b1117,#090d12);overflow:hidden;box-shadow:0 24px 60px -30px rgba(0,0,0,.9)}
+  .wf-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:#0c1219}
+  .dots{display:flex;gap:4px}
+  .dots i{width:7px;height:7px;border-radius:50%;background:#2a3743;display:block}
+  .dots i:first-child{background:#3a2b2b}
+  .dots i:nth-child(2){background:#3a352b}
+  .dots i:nth-child(3){background:#25382f}
+  .wf-title{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  .wf-tag{margin-left:auto;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--amber);border:1px solid rgba(245,181,68,.28);border-radius:3px;padding:2px 5px}
+  .wf-body{padding:14px}
+  .wf-foot{border-top:1px solid var(--line);padding:7px 12px;font-family:var(--mono);font-size:9.5px;color:var(--dim);display:flex;gap:12px;flex-wrap:wrap}
+  .wf-foot .ok{color:var(--green)}
+  .wf-foot .warn{color:var(--amber)}
+
+  .mono{font-family:var(--mono)}
+  .tiny{font-size:10px}
+  .muted{color:var(--muted)}
+  .dim{color:var(--dim)}
+  .row{display:flex;gap:8px;align-items:center}
+  .between{justify-content:space-between}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .stack{display:grid;gap:8px}
+  .divider{height:1px;background:var(--line);margin:12px 0}
+
+  .chip{font-family:var(--mono);font-size:10px;padding:3px 7px;border:1px solid var(--line2);border-radius:4px;color:var(--muted);background:#0b1117;white-space:nowrap}
+  .chip.a{color:var(--acc);border-color:rgba(110,231,215,.35);background:var(--acc-dim)}
+  .chip.w{color:var(--amber);border-color:rgba(245,181,68,.35);background:var(--amber-dim)}
+  .chip.r{color:var(--red);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.1)}
+  .chip.b{color:var(--blue);border-color:rgba(122,162,255,.35);background:rgba(122,162,255,.1)}
+  .chip.g{color:var(--green);border-color:rgba(143,214,168,.35);background:rgba(143,214,168,.1)}
+
+  .box{border:1px solid var(--line);border-radius:7px;background:#0a0f15;padding:10px 12px}
+  .box.hi{border-color:rgba(110,231,215,.35);background:rgba(110,231,215,.055)}
+  .box.warn{border-color:rgba(245,181,68,.3);background:rgba(245,181,68,.06)}
+  .box .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .box .val{font-size:13px;color:var(--text)}
+  .box .sub{font-size:11px;color:var(--dim);margin-top:2px}
+
+  .code{font-family:var(--mono);font-size:11px;line-height:1.7;background:#070b0f;border:1px solid var(--line);border-radius:7px;padding:10px 12px;overflow:auto;color:#9fb0c0;white-space:pre;tab-size:2}
+  .code .k{color:#7aa2ff}
+  .code .s{color:#8fd6a8}
+  .code .n{color:#f5b544}
+  .code .c{color:#4d5e6e}
+  .code .p{color:#6ee7d7}
+
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .metric{border:1px solid var(--line);border-radius:7px;padding:9px 11px;background:#0a0f15}
+  .metric .l{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+  .metric .v{font-family:var(--mono);font-size:22px;color:var(--text);line-height:1.25}
+  .metric .v small{font-size:10px;color:var(--dim);margin-left:2px}
+  .metric .d{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+  .metric.bad .v{color:var(--red)}
+  .metric.good .v{color:var(--acc)}
+
+  .bar-row{display:grid;grid-template-columns:110px 1fr 52px;gap:8px;align-items:center;font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .bar-track{height:7px;background:#0a0f14;border:1px solid var(--line);border-radius:99px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#2f8f85,var(--acc))}
+  .bar-fill.w{background:linear-gradient(90deg,#8a6522,var(--amber))}
+  .bar-fill.r{background:linear-gradient(90deg,#7a3434,var(--red))}
+  .bar-row .num{text-align:right;color:var(--text)}
+
+  .topo{display:grid;grid-template-columns:1fr 76px 1fr;gap:10px;align-items:center}
+  .topo-nodes{display:grid;gap:6px}
+  .tnode{border:1px solid var(--line2);border-radius:5px;padding:5px 8px;font-family:var(--mono);font-size:9.5px;color:var(--muted);background:#0a0f15;display:flex;justify-content:space-between;gap:6px}
+  .tnode b{color:var(--text);font-weight:500}
+  .tpool{border:1px solid rgba(110,231,215,.4);border-radius:6px;padding:10px;background:rgba(110,231,215,.05);text-align:center}
+  .tpool .n{font-family:var(--mono);font-size:9.5px;color:var(--acc)}
+  .tpool .s{font-family:var(--mono);font-size:8.5px;color:var(--dim);margin-top:3px}
+  .links{display:grid;gap:8px}
+  .link{height:1px;background:linear-gradient(90deg,transparent,#2c4d52,transparent);position:relative}
+  .link::after{content:"";position:absolute;right:0;top:-2px;width:4px;height:4px;border-radius:50%;background:var(--acc);opacity:.6}
+  .fab-label{font-family:var(--mono);font-size:8px;color:var(--dim);text-align:center;letter-spacing:.08em;margin-top:6px}
+
+  .heat{display:grid;grid-template-columns:repeat(24,1fr);gap:2px}
+  .heat i{aspect-ratio:1;border-radius:1px;background:#0d1a1f;display:block}
+  .heat-legend{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:8.5px;color:var(--dim);margin-top:6px}
+  .heat-legend .g{height:4px;flex:1;background:linear-gradient(90deg,#0d1a1f,var(--acc))}
+
+  .pol-chips{display:flex;flex-wrap:wrap;gap:5px}
+  .pol-chips button{
+    font-family:var(--mono);font-size:9.5px;padding:4px 8px;border-radius:4px;cursor:pointer;
+    border:1px solid var(--line2);background:#0a0f15;color:var(--dim);transition:.15s;
+  }
+  .pol-chips button:hover{color:var(--muted)}
+  .pol-chips button.on{color:var(--acc);border-color:rgba(110,231,215,.45);background:var(--acc-dim)}
+
+  .chat{display:grid;gap:8px}
+  .msg{border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:11.5px;line-height:1.5;background:#0a0f15;color:var(--muted)}
+  .msg.me{border-color:var(--line2);background:#0c1219;color:var(--text)}
+  .msg.me::before{content:"YOU";font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--dim);display:block;margin-bottom:3px}
+  .msg.ai{border-color:rgba(110,231,215,.28);background:rgba(110,231,215,.045)}
+  .msg.ai::before{content:"CO-PILOT";font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--acc);display:block;margin-bottom:3px}
+  .msg .cite{font-family:var(--mono);font-size:8.5px;color:var(--dim);margin-top:5px;display:block}
+
+  .timeline{position:relative;height:46px;margin:8px 0 4px;border-radius:5px;background:#0a0f15;border:1px solid var(--line);overflow:hidden}
+  .tl-fill{position:absolute;top:0;bottom:0;left:0;width:62%;background:linear-gradient(90deg,rgba(110,231,215,.18),rgba(110,231,215,.3))}
+  .tl-fault{position:absolute;top:0;bottom:0;left:62%;width:9%;background:repeating-linear-gradient(45deg,rgba(248,113,113,.3),rgba(248,113,113,.3) 4px,transparent 4px,transparent 8px)}
+  .tl-repair{position:absolute;top:0;bottom:0;left:71%;width:6%;background:rgba(245,181,68,.25)}
+  .tl-line{position:absolute;top:50%;left:0;right:0;height:1px;background:var(--line2);transform:translateY(-50%)}
+  .tl-mark{position:absolute;top:6px;font-family:var(--mono);font-size:8px;color:var(--dim);transform:translateX(-50%)}
+  .tl-mark.bad{color:var(--red)}
+  .tl-mark.warn{color:var(--amber)}
+  .tl-ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8.5px;color:var(--dim)}
+
+  .stage-foot{display:flex;align-items:center;gap:12px;margin-top:30px;padding-top:16px;border-top:1px solid var(--line)}
+  .stage-foot .count{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.08em}
+  .stage-foot button{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;
+    background:#0b1117;color:var(--muted);border:1px solid var(--line2);
+    padding:7px 11px;border-radius:5px;cursor:pointer;transition:.15s;
+  }
+  .stage-foot button:hover{color:var(--text);border-color:#3a4b5b}
+  .stage-foot .spacer{margin-left:auto}
+
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap}
+  .tabs button{
+    font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);
+    padding:8px 10px;cursor:pointer;
+  }
+  .tabs button:hover{color:var(--muted)}
+  .tabs button.on{color:var(--acc);border-bottom-color:var(--acc)}
+  .tabpanel{display:none}
+  .tabpanel.on{display:block;animation:fade .2s ease}
+  .pipeline{display:grid;grid-template-columns:1.1fr .9fr;gap:26px;align-items:start}
+  .pipeline .code{max-height:420px}
+  .hards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:34px}
+  .hard{border-top:1px solid var(--line2);padding-top:12px}
+  .hard .n{font-family:var(--mono);font-size:9.5px;color:var(--acc);letter-spacing:.12em;margin-bottom:4px}
+  .hard b{display:block;font-size:13.5px;margin-bottom:4px}
+  .hard p{font-size:12.5px;color:var(--muted)}
+  .pipe-notes{display:grid;gap:12px}
+  .pipe-note{display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:13px;color:var(--muted)}
+  .pipe-note .n{font-family:var(--mono);font-size:10px;color:var(--acc);padding-top:2px}
+  .pipe-note b{color:var(--text);font-weight:600;display:block;font-size:13px}
+
+  .recruit-blurb{
+    border:1px solid var(--line);border-radius:10px;background:linear-gradient(90deg,rgba(110,231,215,.055),transparent);
+    padding:18px 20px;margin-bottom:22px;
+  }
+  .recruit-blurb .h{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc);margin-bottom:8px}
+  .recruit-blurb p{font-size:13.5px;color:#b3c3d2;max-width:88ch}
+  .roles{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .role{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:18px;transition:.15s}
+  .role:hover{border-color:var(--line2);background:var(--panel2)}
+  .role-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:2px}
+  .role h3{font-size:16px}
+  .role .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:3px;white-space:nowrap}
+  .role .tag.core{color:var(--acc);border:1px solid rgba(110,231,215,.3);background:var(--acc-dim)}
+  .role .tag.stretch{color:var(--amber);border:1px solid rgba(245,181,68,.3);background:var(--amber-dim)}
+  .role .tag.you{color:var(--blue);border:1px solid rgba(122,162,255,.35);background:rgba(122,162,255,.1)}
+  .role .own{font-size:12.5px;color:var(--muted);margin:8px 0 12px}
+  .role .kv{display:grid;grid-template-columns:58px 1fr;gap:6px 8px;font-size:11.5px}
+  .role .kv .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding-top:3px}
+  .role .kv .v{color:var(--muted)}
+  .role .pitch{
+    margin-top:12px;padding:9px 10px;border-left:2px solid var(--line2);
+    font-size:11.5px;color:#a9bac9;font-style:italic;background:#0a0f14;border-radius:0 5px 5px 0;
+  }
+  .rolemap{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+  .rm-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid rgba(28,39,51,.55)}
+  .rm-row .f{font-size:12.5px;color:var(--muted)}
+  .rm-row .s{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--acc);white-space:nowrap}
+  .rm-row .s.design{color:var(--amber)}
+  .rm-row .s.you{color:var(--blue)}
+  .swap{margin-top:16px;border:1px solid var(--line);border-left:2px solid var(--amber);border-radius:0 8px 8px 0;background:rgba(245,181,68,.045);padding:12px 14px;font-size:12.5px;color:var(--muted);line-height:1.55}
+  .swap b{color:var(--text)}
+  .hiretest{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  .hiretest > div{border:1px solid var(--line);border-radius:7px;padding:10px 12px;font-size:12px;color:var(--muted);background:#0a0f15;line-height:1.5}
+  .hiretest .h{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .donot{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;align-items:center}
+  .donot span{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px dashed var(--line2);border-radius:4px;padding:4px 8px}
+  .donot span:first-child{color:var(--red);border-color:rgba(248,113,113,.3);border-style:solid}
+  .baseline{margin-top:16px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(90deg,rgba(122,162,255,.05),transparent);padding:16px 18px}
+  .baseline .h{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);margin-bottom:8px}
+  .baseline ul{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px}
+  .baseline li{font-size:12px;color:var(--muted);position:relative;padding-left:12px}
+  .baseline li::before{content:"→";position:absolute;left:0;color:var(--blue);opacity:.6}
+
+  .scope{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .scope-col{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:18px}
+  .scope-col h3{font-size:14px;margin-bottom:4px}
+  .scope-col .when{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+  .scope-col ul{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+  .scope-col li{font-size:12.5px;color:var(--muted);padding-left:14px;position:relative;line-height:1.45}
+  .scope-col li::before{content:"";position:absolute;left:0;top:.6em;width:4px;height:4px;border-radius:1px;background:var(--line2)}
+  .scope-col.mvp li::before{background:var(--acc);opacity:.7}
+  .scope-col.cut li::before{background:var(--red);opacity:.5}
+  .scope-col.cut li{color:var(--dim)}
+
+  .demo{display:grid;gap:0;border-left:1px solid var(--line);margin-left:6px}
+  .beat{display:grid;grid-template-columns:66px 1fr;gap:18px;padding:12px 0 12px 20px;position:relative}
+  .beat::before{content:"";position:absolute;left:-4px;top:20px;width:7px;height:7px;border-radius:50%;background:var(--panel);border:1px solid var(--line2)}
+  .beat.on::before{background:var(--acc);border-color:var(--acc);box-shadow:0 0 0 4px rgba(110,231,215,.08)}
+  .beat .t{font-family:var(--mono);font-size:10px;color:var(--dim);padding-top:1px}
+  .beat .c b{display:block;font-size:13.5px;color:var(--text);margin-bottom:2px}
+  .beat .c span{font-size:12.5px;color:var(--muted)}
+
+  .close{text-align:center;padding:80px 0}
+  .close h2{font-size:clamp(24px,3vw,34px);margin-bottom:14px}
+  .close p{color:var(--muted);max-width:60ch;margin:0 auto 24px}
+  .btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .btn{font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:9px 14px;border-radius:5px;border:1px solid var(--line2);color:var(--text);background:#0d141b}
+  .btn:hover{text-decoration:none;border-color:var(--acc);color:var(--acc)}
+  .btn.primary{background:var(--acc);border-color:var(--acc);color:#06110f;font-weight:600}
+  .btn.primary:hover{background:#8ef3e4;color:#06110f}
+
+  footer{border-top:1px solid var(--line);padding:26px 0;font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+  footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+
+  @media (max-width:960px){
+    .hero-grid{grid-template-columns:1fr;gap:32px}
+    .model{grid-template-columns:1fr;gap:10px}
+    .mflow{padding:2px 0}
+    .mflow span{display:inline}
+    .notsthis{grid-template-columns:1fr}
+    .life{grid-template-columns:1fr}
+    .rail{position:static;display:flex;overflow-x:auto;padding-bottom:6px;gap:4px}
+    .rail-btn{border-left:0;border-bottom:2px solid var(--line);border-radius:4px 4px 0 0;white-space:nowrap;padding:7px 10px}
+    .rail-btn.active{border-left:0;border-bottom-color:var(--acc);background:rgba(110,231,215,.07)}
+    .rail-foot{display:none}
+    .stage-grid{grid-template-columns:1fr}
+    .notes{grid-template-columns:1fr 1fr}
+    .pipeline{grid-template-columns:1fr}
+    .roles{grid-template-columns:1fr}
+    .rolemap{grid-template-columns:1fr}
+    .hiretest{grid-template-columns:1fr}
+    .scope{grid-template-columns:1fr}
+  }
+  @media (max-width:640px){
+    .wrap{padding:0 16px}
+    section{padding:52px 0}
+    .nav-links{display:none}
+    .hero{padding:52px 0 40px}
+    .stage-foot .lbl{display:none}
+    .notes{grid-template-columns:1fr}
+    .hards{grid-template-columns:1fr}
+    .persona{grid-template-columns:1fr;gap:6px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-in">
+    <div class="brand"><span class="mark">R</span>RMEMFAB <span class="dim" style="font-size:10px">/ lifecycle</span></div>
+    <div class="nav-links">
+      <a href="#model">Mental model</a>
+      <a href="#lifecycle">Lifecycle</a>
+      <a href="#pipeline">Under the hood</a>
+      <a href="#team">Team</a>
+      <a href="#scope">Scope</a>
+      <a href="#demo">Demo script</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="kicker">Internal explainer · not the product</div>
+      <h1>Watch an engineer decide if remote memory is <em>worth it</em>.</h1>
+      <p class="lead">RmemFab is a deterministic simulator for memory placement. This page walks the full lifecycle — the question, the scenario, the run, the argument, the evidence — so you can explain it, recruit for it, and design a dashboard around it.</p>
+      <div class="flag">Recruiting artifact · redesign the UI from these wireframes</div>
+    </div>
+    <aside class="facts">
+      <div class="fact"><div class="k">What it is</div><div class="v">A discrete-event engine that turns a scenario into memory events, then metrics.</div></div>
+      <div class="fact"><div class="k">What it is not</div><div class="v"><span>A GPU emulator or a benchmark. It models memory movement, not kernels.</span></div></div>
+      <div class="fact"><div class="k">The decision it serves</div><div class="v">Is remote capacity cheaper than local capacity at your latency target?</div></div>
+      <div class="fact"><div class="k">Build window</div><div class="v">10 days · Muse AI Hackathon · Indie track</div></div>
+      <div class="fact"><div class="k">Stack</div><div class="v">Python core · React dashboard · Meta open weights via Baseten</div></div>
+      <div class="fact"><div class="k">Core guarantee</div><div class="v"><span>Same scenario + seed + version = same result.</span></div></div>
+    </aside>
+  </div>
+</header>
+
+<section id="model">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">The mental model</div>
+      <h2>Three objects, one loop.</h2>
+      <p>Everything in the product is one of these. If a feature does not make the scenario more honest, the engine more trustworthy, or the verdict easier to argue, it is not in scope.</p>
+    </div>
+    <div class="model">
+      <div class="mbox">
+        <div class="n">01 / SCENARIO</div>
+        <h3>The system you have</h3>
+        <p>Nodes, local DRAM, remote pools, fabric links, page size, workload, policy, faults, seed. Everything is a parameter. Nothing important hides in code.</p>
+      </div>
+      <div class="mflow"><span>→</span><span>events</span></div>
+      <div class="mbox">
+        <div class="n">02 / ENGINE</div>
+        <h3>The system you simulate</h3>
+        <p>A priority-queue event loop resolves every page access against the hierarchy. Misses become transfers, migrations, prefetches — each with a cost.</p>
+      </div>
+      <div class="mflow"><span>→</span><span>metrics</span></div>
+      <div class="mbox">
+        <div class="n">03 / VERDICT</div>
+        <h3>The decision you defend</h3>
+        <p>Latency percentiles, hit ratios, fabric saturation, cost. Every number traces back to an event and a parameter, not to a model's opinion.</p>
+      </div>
+    </div>
+    <div class="notsthis">
+      <div><b>Not</b> a cycle-accurate hardware emulator</div>
+      <div><b>Not</b> a replacement for a real CXL cluster</div>
+      <div><b>Not</b> an LLM wrapper with a chart on top</div>
+    </div>
+    <div class="persona">
+      <div class="who">The user</div>
+      <p>An AI infrastructure engineer with <b>ten minutes, a p95 SLO, and a hardware budget due Friday</b>. They do not want a simulator tour. They want to know which option to defend, where it breaks, and how to prove it to the person who signs the purchase order.</p>
+    </div>
+  </div>
+</section>
+
+<section id="lifecycle">
+  <div class="wrap">
+    <div class="life-top">
+      <div class="section-head" style="margin-bottom:0">
+        <div class="kicker">The lifecycle</div>
+        <h2>Nine stages, one defensible decision.</h2>
+        <p>The engineer loops between reading, iterating, and stress-testing until the answer survives scrutiny. The tool never decides; it removes the guesswork.</p>
+      </div>
+    </div>
+    <div class="loop" id="loop" aria-label="Jump to a stage"></div>
+
+    <div class="life">
+      <aside class="rail" id="rail" aria-label="Lifecycle stages"></aside>
+
+      <div class="panel">
+        <article class="stage active" id="stage-1">
+          <div class="stage-eyebrow"><span>STAGE 01</span><span class="t">10 MIN · NO CODE</span></div>
+          <h3>Write the decision down before you touch the tool.</h3>
+          <p class="thought">I don't need a simulator. I need to know whether to buy two more nodes or a CXL shelf — and what evidence would change my mind.</p>
+          <div class="stage-grid">
+            <div class="notes">
+              <div class="note">
+                <h4>What the engineer does</h4>
+                <ul>
+                  <li>Names the workload, the current failure mode, and the target: p95 decode latency, cost per million tokens, or capacity headroom.</li>
+                  <li>Writes the two options being compared and the threshold that separates them.</li>
+                  <li>States what result would falsify the hypothesis.</li>
+                </ul>
+              </div>
+              <div class="note">
+                <h4>What the tool should show</h4>
+                <ul>
+                  <li>A one-page decision brief, not a dashboard.</li>
+                  <li>It becomes the scenario name and the opening line of the demo.</li>
+                </ul>
+              </div>
+              <div class="note hood">
+                <h4>Under the hood</h4>
+                <ul><li>Nothing yet. This artifact is what keeps every later run honest.</li></ul>
+              </div>
+            </div>
+            <div class="wf">
+              <div class="wf-head"><span class="dots"><i></i><i></i><i></i></span><span class="wf-title">decision_brief.md</span><span class="wf-tag">SKETCH</span></div>
+              <div class="wf-body stack">
+                <div class="box">
+                  <div class="lbl">Question</div>
+                  <div class="val">Llama-3-70B, 8k context, 8×H100 per node. KV cache no longer fits. Do we add compute nodes or attach a shared CXL pool?</div>
+                </div>
+                <div class="grid2">
+                  <div class="box"><div class="lbl">Option A</div><div class="val">Scale out local DRAM</div><div class="sub">+2 nodes · predictable · expensive</div></div>
+                  <div class="box hi"><div class="lbl">Option B</div><div class="val">CXL memory pool</div><div class="sub">+4 TiB shared · 180 ns · 48 GB/s</div></div>
+                </div>
+                <div class="box warn">
+                  <div class="lbl">Decision threshold</div>
+                  <div class="val mono" style="font-size:12px">p95 decode ≤ 300 ms · cost ≤ $0.9 / 1M tokens · survives 1 link loss</div>
+                </div>
+                <div class="box">
+                  <div class="lbl">Falsify if</div>
+                  <div class="val" style="font-size:12px;color:var(--muted)">remote queueing pushes p95 over 300 ms for more than 5% of requests, or a single link degradation costs more than 15% throughput.</div>
+                </div>
+              </div>
+              <div class="wf-foot"><span class="ok">becomes scenario.name</span><span>becomes demo beat 0:00</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage" id="stage-2">
+          <div class="stage-eyebrow"><span>STAGE 02</span><span class="t">20 MIN · CONFIG</span></div>
+          <h3>Describe the system you already have.</h3>
+          <p class="thought">Four H100 nodes, 512 GiB DRAM each, one CXL pool at 180 ns. I can write that down in ten minutes — and the validator catches the unit mistakes before anything runs.</p>
+          <div class="stage-grid">
+            <div class="notes">
+              <div class="note">
+                <h4>What the engineer does</h4>
+                <ul>
+                  <li>Adds compute and memory nodes with explicit capacities, latencies, and bandwidths.</li>
+                  <li>Adds fabric links: latency, bandwidth, in-flight bytes, queue depth, loss.</li>
+                  <li>Sets page size, duration, warmup, and a seed.</li>
+                </ul>
+              </div>
+              <div class="note">
+                <h4>What the tool should show</h4>
+                <ul>
+                  <li>A topology preview that matches what they typed.</li>
+                  <li>Field-level schema errors before the run, not stack traces during it.</li>
+                  <li>No hidden defaults. Units are visible: <span class="mono">ns</span> and <span class="mono">bytes/ns</span>.</li>
+                </ul>
+              </div>
+              <div class="note hood">
+                <h4>Under the hood</h4>
+                <ul>
+                  <li><span class="mono">SPECS/config.schema.json</span> → Pydantic.</li>
+                  <li>Immutable normalized scenario + scenario hash.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="wf">
+              <div class="wf-head"><span class="dots"><i></i><i></i><i></i></span><span class="wf-title">scenario / llama-70b-cxl.json</span><span class="wf-tag">SKETCH</span></div>
+              <div class="wf-body">
+                <div class="grid2" style="grid-template-columns:1.05fr .95fr">
+                  <div class="code"><span class="c">// validated on save</span>
+{
+  <span class="k">"version"</span>: <span class="s">"0.1"</span>,
+  <span class="k">"seed"</span>: <span class="n">42</span>,
+  <span class="k">"page_size_bytes"</span>: <span class="n">2097152</span>,
+  <span class="k">"nodes"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="s">"node-0"</span>,
+      <span class="k">"role"</span>: <span class="s">"compute"</span>,
+      <span class="k">"local_memory"</span>: {
+        <span class="k">"capacity_bytes"</span>: <span class="n">549755813888</span>,
+        <span class="k">"latency_ns"</span>: <span class="n">90</span>,
+        <span class="k">"bandwidth_bytes_per_ns"</span>: <span class="n">400</span>
+      }
+    }
+    <span class="c">// + node-1..3</span>
+  ],
+  <span class="k">"fabric"</span>: {
+    <span class="k">"links"</span>: [{
+      <span class="k">"id"</span>: <span class="s">"node-0-cxl"</span>,
+      <span class="k">"from"</span>: <span class="s">"node-0"</span>,
+      <span class="k">"to"</span>: <span class="s">"remote-pool"</span>,
+      <span class="k">"latency_ns"</span>: <span class="n">180</span>,
+      <span class="k">"bandwidth_bytes_per_ns"</span>: <span class="n">48</span>
+    }]
+  }
+}</div>
+                  <div class="stack">
+                    <div class="topo">
+                      <div class="topo-nodes">
+                        <div class="tnode"><b>node-0</b><span>512 GiB</span></div>
+                        <div class="tnode"><b>node-1</b><span>512 GiB</span></div>
+                        <div class="tnode"><b>node-2</b><span>512 GiB</span></div>
+                        <div class="tnode"><b>node-3</b><span>512 GiB</span></div>
+                      </div>
+                      <div>
+                        <div class="links"><div class="link"></div><div class="link"></div><div class="link"></div><div class="link"></div></div>
+                        <div class="fab-label">CXL · 180 ns · 48 GB/s</div>
+                      </div>
+                      <div class="tpool"><div class="n">remote-pool</div><div class="s">4 TiB</div><div class="s">180 ns</div></div>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="row between"><span class="tiny mono dim">VALIDATION</span><span class="chip g">schema 0.1 ok</span></div>
+                    <div class="row between"><span class="tiny mono dim">UNITS</span><span class="chip">ns · bytes/ns</span></div>
+                    <div class="row between"><span class="tiny mono dim">HASH</span><span class="mono tiny" style="color:var(--dim)">9f2c…a71d</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="wf-foot"><span class="ok">valid</span><span>4 links</span><span>5 nodes</span><span class="warn">2 TiB headroom</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage" id="stage-3">
+          <div class="stage-eyebrow"><span>STAGE 03</span><span class="t">15 MIN · WORKLOAD</span></div>
+          <h3>Pick the memory behavior, not the model benchmark.</h3>
+          <p class="thought">The KV cache grows a couple of MiB per token and decode dominates. That shape — not a tokens-per-second leaderboard — is what decides whether remote memory helps.</p>
+          <div class="stage-grid">
+            <div class="notes">
+              <div class="note">
+                <h4>What the engineer does</h4>
+                <ul>
+                  <li>Chooses a profile: KV decode, prefill, sparse attention, MoE, mixed, or an imported trace.</li>
+                  <li>Sets model geometry and the request mix: context lengths, concurrency, arrival rate.</li>
+                  <li>Checks the generated access pattern before spending compute.</li>
+                </ul>
+              </div>
+              <div class="note">
+                <h4>What the tool should show</h4>
+                <ul>
+                  <li>Working-set growth, locality, and whether pages are read-mostly or dirty.</li>
+                  <li>“Synthetic” versus “measured” labels, always visible.</li>
+                </ul>
+              </div>
+              <div class="note hood">
+                <h4>Under the hood</h4>
+                <ul>
+                  <li>Closed-form KV sizing from layers, KV heads, head dim, dtype.</li>
+                  <li>Seeded arrival process; trace replay with byte/time normalization.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="wf">
+              <div class="wf-head"><span class="dots"><i></i><i></i><i></i></span><span class="wf-title">workload / select profile</span><span class="wf-tag">SKETCH</span></div>
+              <div class="wf-body stack">
+                <div class="grid3">
+                  <div class="box hi"><div class="lbl">Selected</div><div class="val">kv_cache_decode</div><div class="sub">decode-dominant</div></div>
+                  <div class="box"><div class="lbl">Profile</div><div class="val">prefill</div><div class="sub">bulk allocation</div></div>
+                  <div class="box"><div class="lbl">Profile</div><div class="val">moe</div><div class="sub">bursty experts</div></div>
+                  <div class="box"><div class="lbl">Profile</div><div class="val">sparse_attention</div><div class="sub">irregular lookups</div></div>
+                  <div class="box"><div class="lbl">Profile</div><div class="val">mixed</div><div class="sub">multi-tenant</div></div>
+                  <div class="box"><div class="lbl">Import</div><div class="val">trace.jsonl</div><div class="sub">measured on GPU</div></div>
+                </div>
+                <div class="divider"></div>
+                <div class="grid2">
+                  <div class="stack">
+                    <div class="row between"><span class="tiny mono dim">LAYERS</span><span class="mono tiny">80</span></div>
+                    <div class="row between"><span class="tiny mono dim">KV HEADS</span><span class="mono tiny">8</span></div>
+                    <div class="row between"><span class="tiny mono dim">HEAD DIM</span><span class="mono tiny">128</span></div>
+                    <div class="row between"><span class="tiny mono dim">CONTEXT</span><span class="mono tiny">8,192 tok</span></div>
+                    <div class="row between"><span class="tiny mono dim">CONCURRENCY</span><span class="mono tiny">16</span></div>
+                  </div>
+                  <div class="box">
+                    <div class="lbl">Working set over one request</div>
+                    <svg viewBox="0 0 220 62" width="100%" height="62" preserveAspectRatio="none" aria-hidden="true">
+                      <polyline points="0,58 30,55 60,50 90,43 120,35 150,26 180,16 210,6" fill="none" stroke="#6ee7d7" stroke-width="1.6"/>
+                      <line x1="0" y1="58" x2="210" y2="58" stroke="#1c2733" stroke-width="1"/>
+                      <text x="2" y="12" fill="#5d6b79" font-family="monospace" font-size="6">2 MiB / token</text>
+                    </svg>
+                    <div class="row between" style="margin-top:4px"><span class="tiny mono dim">t=0</span><span class="chip a">grows with context</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="wf-foot"><span class="ok">synthetic · labeled</span><span>8k context</span><span>≈ 2 MiB / token</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage" id="stage-4">
+          <div class="stage-eyebrow"><span>STAGE 04</span><span class="t">10 MIN · EXPERIMENT DESIGN</span></div>
+          <h3>Decide what “better” means before you run.</h3>
+          <p class="thought">Local-only is the floor. Swap-to-remote is the dumb baseline. Hot/cold is my candidate. If they don't share a seed, the comparison is theater.</p>
+          <div class="stage-grid">
+            <div class="notes">
+              <div class="note">
+                <h4>What the engineer does</h4>
+                <ul>
+                  <li>Pins a baseline and selects candidates.</li>
+                  <li>Sets policy parameters: thresholds, tick interval, residency, migration caps.</li>
+                  <li>Confirms that the only difference between runs is the policy.</li>
+                </ul>
+              </div>
+              <div class="note">
+                <h4>What the tool should show</h4>
+                <ul>
+                  <li>The comparison matrix and an explicit “same seed, same trace, same start state” guarantee.</li>
+                  <li>A parameter diff, not just a dropdown.</li>
+                </ul>
+              </div>
+              <div class="note hood">
+                <h4>Under the hood</h4>
+                <ul>
+                  <li>Policy interface: <span class="mono">on_access</span>, <span class="mono">on_pressure</span>, <span class="mono">on_tick</span>.</li>
+                  <li>Every policy observes the identical event stream and pressure signals.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="wf">
+              <div class="wf-head"><span class="dots"><i></i><i></i><i></i></span><span class="wf-title">compare / policies</span><span class="wf-tag">SKETCH</span></div>
+              <div class="wf-body stack">
+                <div class="row between"><span class="tiny mono dim">BASELINE · PINNED</span><span class="chip b">local_only</span></div>
+                <div class="stack">
+                  <div class="row between box hi"><span class="mono tiny">swap_remote</span><span class="chip a">selected</span></div>
+                  <div class="row between box hi"><span class="mono tiny">hot_cold</span><span class="chip a">candidate</span></div>
+                  <div class="row between box"><span class="mono tiny">frequency_aware</span><span class="chip">available</span></div>
+                  <div class="row between box"><span class="mono tiny">predictive_prefetch</span><span class="chip">available</span></div>
+                  <div class="row between box"><span class="mono tiny">cost_aware</span><span class="chip">available</span></div>
+                </div>
+                <div class="divider"></div>
+                <div class="grid2">
+                  <div class="row between"><span class="tiny mono dim">SEED</span><span class="mono tiny">42 · locked</span></div>
+                  <div class="row between"><span class="tiny mono dim">TRACE HASH</span><span class="mono tiny">a1c8…</span></div>
+                  <div class="row between"><span class="tiny mono dim">HOT THRESHOLD</span><span class="mono tiny">8</span></div>
+                  <div class="row between"><span class="tiny mono dim">MIGRATIONS / TICK</span><span class="mono tiny">64</span></div>
+                </div>
+                <div class="row"><span class="chip g">only the policy differs</span></div>
+              </div>
+              <div class="wf-foot"><span class="ok">3 runs queued</span><span>same seed</span><span>same warmup</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage" id="stage-5">
+          <div class="stage-eyebrow"><span>STAGE 05</span><span class="t">1–20 MIN · EXECUTE</span></div>
+          <h3>Run the smallest experiment that can change your mind.</h3>
+          <p class="thought">60 simulated seconds, 5 s warmup, seed 42. If this is slow, it's a model bug — not a hardware problem. A sweep can wait.</p>
+          <div class="stage-grid">
+            <div class="notes">
+              <div class="note">
+                <h4>What the engineer does</h4>
+                <ul>
+                  <li>Runs one scenario and watches virtual time advance.</li>
+                  <li>Optionally fans out a sweep across fabric latencies or seeds on Modal sandboxes.</li>
+                  <li>Cancels safely: partial runs are still valid evidence.</li>
+                </ul>
+              </div>
+              <div class="note">
+                <h4>What the tool should show</h4>
+                <ul>
+                  <li>Events processed, queue depth, and current simulated time — not a fake spinner.</li>
+                  <li>A run ID they can cite later.</li>
+                </ul>
+              </div>
+              <div class="note hood">
+                <h4>Under the hood</h4>
+                <ul>
+                  <li><span class="mono">heapq</span> event loop with deterministic tie-breaking.</li>
+                  <li>Independent seeded RNG streams for workload, policy, and faults.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="wf">
+              <div class="wf-head"><span class="dots"><i></i><i></i><i></i></span><span class="wf-title">run / 01J8K2…</span><span class="wf-tag">SKETCH</span></div>
+              <div class="wf-body stack">
+                <div class="row between"><span class="mono tiny" style="color:var(--text)">hot_cold · seed 42</span><span class="chip a">running</span></div>
+                <div>
+                  <div class="bar-row" style="grid-template-columns:1fr 70px"><div class="bar-track"><div class="bar-fill" style="width:68%"></div></div><div class="num">68%</div></div>
+                  <div class="row between" style="margin-top:5px"><span class="tiny mono dim">virtual time</span><span class="tiny mono">00:41 / 01:00</span></div>
+                </div>
+                <div class="grid3">
+                  <div class="box"><div class="lbl">Events</div><div class="val mono" style="font-size:15px">14.2M</div></div>
+                  <div class="box"><div class="lbl">Queue depth</div><div class="val mono" style="font-size:15px">1.8 MB</div></div>
+                  <div class="box"><div class="lbl">Throughput</div><div class="val mono" style="font-size:15px">6.1M ev/s</div></div>
+                </div>
+                <div class="divider"></div>
+                <div class="row between"><span class="tiny mono dim">SWEEP · 5 LATENCY POINTS</span><span class="chip">Modal · queued</span></div>
+                <div class="grid3">
+                  <div class="box"><div class="lbl" style="margin-bottom:0">140 ns</div><div class="sub" style="color:var(--green)">done</div></div>
+                  <div class="box"><div class="lbl" style="margin-bottom:0">180 ns</div><div class="sub" style="color:var(--amber)">running</div></div>
+                  <div class="box"><div class="lbl" style="margin-bottom:0">260 ns</div><div class="sub">queued</div></div>
+                </div>
+              </div>
+              <div class="wf-foot"><span class="ok">deterministic</span><span>cancel-safe</span><span class="warn">2 workers idle</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage" id="stage-6">
+          <div class="stage-eyebrow"><span>STAGE 06</span><span class="t">THE PAYOFF</span></div>
+          <h3>Read the bottleneck, not the headline number.</h3>
+          <p class="thought">p95 went from 214 to 268 ms. That is not “remote memory is slow.” That is queueing on one link, for 40% of the run. I need to see where it happened.</p>
+          <div class="stage-grid">
+            <div class="notes">
+              <div class="note">
+                <h4>What the engineer does</h4>
+                <ul>
+                  <li>Compares percentiles, hit ratios, remote traffic, and migration volume.</li>
+                  <li>Isolates the tier, link, and time window responsible.</li>
+                  <li>Reads the latency-over-time curve to find the cliff.</li>
+                </ul>
+              </div>
+              <div class="note">
+                <h4>What the tool should show</h4>
+                <ul>
+                  <li>One sentence verdict, then the evidence.</li>
+                  <li>Every chart filterable by node, link, and time.</li>
+                  <li>A visible difference from the baseline, always.</li>
+                </ul>
+              </div>
+              <div class="note hood">
+                <h4>Under the hood</h4>
+                <ul>
+                  <li>Streaming aggregation over the event log; percentiles computed from sampled windows.</li>
+                  <li>Each metric keeps a link back to the events that produced it.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="wf">
+              <div class="wf-head"><span class="dots"><i></i><i></i><i></i></span><span class="wf-title">run / verdict</span><span class="wf-tag">SKETCH · MOCK DATA</span></div>
+              <div class="wf-body stack">
+                <div class="pol-chips" id="polChips"></div>
+                <div class="metrics">
+                  <div class="metric"><div class="l">p50</div><div class="v" id="m50">205<small>ms</small></div><div class="d" id="d50">+8% vs local</div></div>
+                  <div class="metric bad"><div class="l">p95</div><div class="v" id="m95">268<small>ms</small></div><div class="d" id="d95">+25% vs local</div></div>
+                  <div class="metric"><div class="l">p99</div><div class="v" id="m99">388<small>ms</small></div><div class="d" id="d99">+61% vs local</div></div>
+                </div>
+                <div class="box warn">
+                  <div class="lbl">Verdict</div>
+                  <div class="val" style="font-size:12px" id="verdict">Remote read queueing on node-2-cxl accounts for 61% of added stall. Capacity is fine; the link is the problem.</div>
+                </div>
+                <div class="grid2">
+                  <div class="stack">
+                    <div class="bar-row"><span>remote read</span><span class="bar-track"><span class="bar-fill w" style="width:61%"></span></span><span class="num">61%</span></div>
+                    <div class="bar-row"><span>link queue</span><span class="bar-track"><span class="bar-fill w" style="width:22%"></span></span><span class="num">22%</span></div>
+                    <div class="bar-row"><span>migration</span><span class="bar-track"><span class="bar-fill" style="width:11%"></span></span><span class="num">11%</span></div>
+                    <div class="bar-row"><span>compute</span><span class="bar-track"><span class="bar-fill" style="width:6%"></span></span><span class="num">6%</span></div>
+                    <div class="tiny mono dim" style="margin-top:4px">stall breakdown · added vs local-only</div>
+                  </div>
+                  <div class="box">
+                    <div class="lbl">p95 over time</div>
+                    <svg viewBox="0 0 200 66" width="100%" height="66" preserveAspectRatio="none" aria-hidden="true">
+                      <line x1="0" y1="52" x2="200" y2="52" stroke="#1c2733"/>
+                      <polyline points="0,46 20,45 40,47 60,44 80,46 100,40 120,28 140,18 160,22 180,30 200,26" fill="none" stroke="#6ee7d7" stroke-width="1.5"/>
+                      <polyline points="0,48 20,47 40,48 60,47 80,48 100,47 120,46 140,45 160,46 180,47 200,46" fill="none" stroke="#5d6b79" stroke-width="1.2" stroke-dasharray="3 3"/>
+                      <line x1="132" y1="4" x2="132" y2="58" stroke="#f5b544" stroke-width=".8" stroke-dasharray="2 3"/>
+                      <text x="136" y="10" fill="#f5b544" font-family="monospace" font-size="5.5">cliff</text>
+                    </svg>
+                    <div class="row between"><span class="tiny mono dim">baseline</span><span class="tiny mono" style="color:var(--acc)">hot_cold</span></div>
+                  </div>
+                </div>
+                <div class="heat" id="heatmap"></div>
+                <div class="heat-legend"><span>node-0</span><span class="g"></span><span>node-3</span><span>· occupancy by page</span></div>
+              </div>
+              <div class="wf-foot"><span class="ok">grounded in 14.2M events</span><span>click any bar to filter</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage" id="stage-7">
+          <div class="stage-eyebrow"><span>STAGE 07</span><span class="t">THE LOOP</span></div>
+          <h3>Ask why, then make the tool prove it.</h3>
+          <p class="thought">If prefetching doubles wasted pages, it isn't free. I want the counterfactual — same seed, same trace, measured delta.</p>
+          <div class="stage-grid">
+            <div class="notes">
+              <div class="note">
+                <h4>What the engineer does</h4>
+                <ul>
+                  <li>Asks a grounded question about the run.</li>
+                  <li>Inspects the cited events before trusting the answer.</li>
+                  <li>Accepts a schema-valid patch and reruns the same seed.</li>
+                </ul>
+              </div>
+              <div class="note">
+                <h4>What the tool should show</h4>
+                <ul>
+                  <li>An explanation that references specific events, not vibes.</li>
+                  <li>A diff, not a replacement scenario.</li>
+                  <li>“Measured delta” after the rerun — never a predicted one presented as measured.</li>
+                </ul>
+              </div>
+              <div class="note hood">
+                <h4>Under the hood</h4>
+                <ul>
+                  <li>Meta open-weight model via Baseten.</li>
+                  <li>Tool calls read telemetry; output must validate against the scenario schema.</li>
+                  <li>Proposals are explicit runs, not silent mutations.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="wf">
+              <div class="wf-head"><span class="dots"><i></i><i></i><i></i></span><span class="wf-title">co-pilot / grounded</span><span class="wf-tag">SKETCH</span></div>
+              <div class="wf-body stack">
+                <div class="chat">
+                  <div class="msg me">p95 is 1.25× local-only. Where is it going, and what is the cheapest fix?</div>
+                  <div class="msg ai">62% of added stall is remote-read queueing on node-2-cxl during 18–27 s. The pool is at 71% occupancy and hot/cold migrates 64 pages/tick into the same window.
+                    <span class="cite">cites: policy_pressure ×41 · link_congested ×12 · page_miss ×8,204</span>
+                  </div>
+                  <div class="msg me">Cheapest fix that doesn't add hardware?</div>
+                  <div class="msg ai">Cap migrations at 32/tick and prefetch 2 pages ahead for sequential KV runs. Proposed diff below. Rerun with seed 42 to measure it.
+                    <span class="cite">proposal validates against schema 0.1</span>
+                  </div>
+                </div>
+                <div class="divider"></div>
+                <div class="code"><span class="c">// proposed diff · hot_cold</span>
+  <span class="k">"max_migrations_per_tick"</span>: <span class="n">64</span> <span class="c">→</span> <span class="n">32</span>
+  <span class="k">"prefetch_window_pages"</span>: <span class="n">0</span> <span class="c">→</span> <span class="n">2</span></div>
+                <div class="row between">
+                  <div class="row"><span class="chip g">schema valid</span><span class="chip">same seed</span></div>
+                  <button class="chip a" style="cursor:pointer;font-size:10px;padding:5px 9px">Rerun &amp; measure →</button>
+                </div>
+              </div>
+              <div class="wf-foot"><span class="ok">no invented numbers</span><span>rerun required for delta</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage" id="stage-8">
+          <div class="stage-eyebrow"><span>STAGE 08</span><span class="t">RESILIENCE</span></div>
+          <h3>Break it before production does.</h3>
+          <p class="thought">A pool that is 20% faster until one link degrades is not a win. I need to know how it fails, and whether the policy thrashes while it does.</p>
+          <div class="stage-grid">
+            <div class="notes">
+              <div class="note">
+                <h4>What the engineer does</h4>
+                <ul>
+                  <li>Injects a node failure, link degradation, or packet loss.</li>
+                  <li>Sets MTBF and repair time for probabilistic failure.</li>
+                  <li>Compares steady-state and degraded-mode metrics.</li>
+                </ul>
+              </div>
+              <div class="note">
+                <h4>What the tool should show</h4>
+                <ul>
+                  <li>A fault timeline aligned with the latency curve.</li>
+                  <li>Recovery time, throughput loss, and whether data was lost.</li>
+                  <li>Degradation, not just a binary pass/fail.</li>
+                </ul>
+              </div>
+              <div class="note hood">
+                <h4>Under the hood</h4>
+                <ul>
+                  <li>Deterministic fault schedule and seeded failure process.</li>
+                  <li>Interrupted transfers emit terminal events with status.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="wf">
+              <div class="wf-head"><span class="dots"><i></i><i></i><i></i></span><span class="wf-title">faults / degraded mode</span><span class="wf-tag">SKETCH</span></div>
+              <div class="wf-body stack">
+                <div class="timeline">
+                  <div class="tl-fill"></div>
+                  <div class="tl-fault"></div>
+                  <div class="tl-repair"></div>
+                  <div class="tl-line"></div>
+                  <div class="tl-mark bad" style="left:62%">node-2 lost</div>
+                  <div class="tl-mark warn" style="left:74%">repair</div>
+                </div>
+                <div class="tl-ticks"><span>0 s</span><span>20 s</span><span>40 s</span><span>60 s</span></div>
+                <div class="metrics">
+                  <div class="metric bad"><div class="l">p95</div><div class="v">317<small>ms</small></div><div class="d">+18% degraded</div></div>
+                  <div class="metric"><div class="l">Throughput</div><div class="v">-7<small>%</small></div><div class="d">recovers in 1.4 s</div></div>
+                  <div class="metric good"><div class="l">Data loss</div><div class="v">0</div><div class="d">pages re-fetched</div></div>
+                </div>
+                <div class="box">
+                  <div class="lbl">Policy behavior</div>
+                  <div class="val" style="font-size:12px">No migration storm. Hot pages stay pinned; cold pages fail over to the surviving link.</div>
+                </div>
+                <div class="row"><span class="chip w">1 node failure</span><span class="chip w">link -40% bw</span><span class="chip">0.01% loss</span></div>
+              </div>
+              <div class="wf-foot"><span class="ok">degrades gracefully</span><span class="warn">p95 budget exceeded 1.4 s</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage" id="stage-9">
+          <div class="stage-eyebrow"><span>STAGE 09</span><span class="t">PROOF</span></div>
+          <h3>Ship evidence, not a screenshot.</h3>
+          <p class="thought">If a teammate can't reproduce this in one command, I didn't finish the experiment. The run bundle is the deliverable.</p>
+          <div class="stage-grid">
+            <div class="notes">
+              <div class="note">
+                <h4>What the engineer does</h4>
+                <ul>
+                  <li>Exports the scenario, manifest, metrics, and optional event log.</li>
+                  <li>Records seed, version, and scenario hash.</li>
+                  <li>Shares a run link or attaches the bundle to a design doc.</li>
+                </ul>
+              </div>
+              <div class="note">
+                <h4>What the tool should show</h4>
+                <ul>
+                  <li>A copyable reproduce command.</li>
+                  <li>A diff against the pinned baseline.</li>
+                  <li>Byte-identical results on rerun — or a loud warning.</li>
+                </ul>
+              </div>
+              <div class="note hood">
+                <h4>Under the hood</h4>
+                <ul>
+                  <li>Run manifest, scenario hash, JSONL/Parquet outputs.</li>
+                  <li><span class="mono">rmemfab run scenario.json --seed 42</span></li>
+                </ul>
+              </div>
+            </div>
+            <div class="wf">
+              <div class="wf-head"><span class="dots"><i></i><i></i><i></i></span><span class="wf-title">run bundle / export</span><span class="wf-tag">SKETCH</span></div>
+              <div class="wf-body stack">
+                <div class="grid2">
+                  <div class="box"><div class="lbl">scenario.json</div><div class="val mono" style="font-size:11px">llama-70b-cxl</div><div class="sub">hash 9f2c…a71d</div></div>
+                  <div class="box"><div class="lbl">manifest.json</div><div class="val mono" style="font-size:11px">seed 42 · v0.1</div><div class="sub">schema 0.1</div></div>
+                  <div class="box"><div class="lbl">metrics.parquet</div><div class="val mono" style="font-size:11px">214 KB</div><div class="sub">summary + windows</div></div>
+                  <div class="box"><div class="lbl">events.jsonl</div><div class="val mono" style="font-size:11px">1.9 GB</div><div class="sub">optional · streamable</div></div>
+                </div>
+                <div class="code"><span class="c">$</span> rmemfab run scenario.json --seed <span class="n">42</span>
+<span class="c">→</span> run 01J8K2… · identical metrics <span class="p">✓</span></div>
+                <div class="box hi">
+                  <div class="lbl">Delta vs baseline · local_only</div>
+                  <div class="row between"><span class="tiny mono">p95</span><span class="mono tiny" style="color:var(--amber)">214 → 268 ms (+25%)</span></div>
+                  <div class="row between"><span class="tiny mono">capacity</span><span class="mono tiny" style="color:var(--green)">+4 TiB</span></div>
+                  <div class="row between"><span class="tiny mono">cost / 1M tok</span><span class="mono tiny" style="color:var(--green)">−31%</span></div>
+                </div>
+                <div class="row between"><span class="chip g">reproducible</span><span class="chip">share link</span><span class="chip">view diff</span></div>
+              </div>
+              <div class="wf-foot"><span class="ok">byte-identical rerun</span><span>verdict: attach the pool, cap migrations</span></div>
+            </div>
+          </div>
+        </article>
+
+        <div class="stage-foot">
+          <button id="prevBtn" type="button">← Previous</button>
+          <span class="count" id="stageCount">01 / 09</span>
+          <span class="spacer"></span>
+          <span class="lbl tiny mono dim">Arrow keys work too</span>
+          <button id="nextBtn" type="button">Next stage →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pipeline">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Under the hood</div>
+      <h2>What a run actually is.</h2>
+      <p>Four artifacts. If you can explain this pipeline to a judge, you can explain the whole product.</p>
+    </div>
+    <div class="tabs" id="tabs">
+      <button class="on" data-tab="scenario" type="button">1 · Scenario</button>
+      <button data-tab="events" type="button">2 · Event stream</button>
+      <button data-tab="metrics" type="button">3 · Metrics</button>
+      <button data-tab="manifest" type="button">4 · Manifest</button>
+    </div>
+    <div class="pipeline">
+      <div>
+        <div class="tabpanel on" data-panel="scenario">
+          <div class="code">{
+  <span class="k">"version"</span>: <span class="s">"0.1"</span>,
+  <span class="k">"name"</span>: <span class="s">"llama-70b-cxl"</span>,
+  <span class="k">"seed"</span>: <span class="n">42</span>,
+  <span class="k">"duration_ns"</span>: <span class="n">60000000000</span>,
+  <span class="k">"page_size_bytes"</span>: <span class="n">2097152</span>,
+  <span class="k">"nodes"</span>: [<span class="c">/* 4 compute · 1 memory */</span>],
+  <span class="k">"fabric"</span>: { <span class="k">"links"</span>: [<span class="c">/* 4 CXL links */</span>] },
+  <span class="k">"workload"</span>: {
+    <span class="k">"type"</span>: <span class="s">"synthetic"</span>,
+    <span class="k">"profile"</span>: <span class="s">"kv_cache_decode"</span>
+  },
+  <span class="k">"policy"</span>: {
+    <span class="k">"name"</span>: <span class="s">"hot_cold"</span>,
+    <span class="k">"params"</span>: { <span class="k">"hot_threshold"</span>: <span class="n">8</span> }
+  },
+  <span class="k">"faults"</span>: { <span class="c">/* optional */</span> }
+}</div>
+        </div>
+        <div class="tabpanel" data-panel="events">
+          <div class="code">{"event":"page_access","time_ns":<span class="n">1840021</span>,"seq":<span class="n">88</span>,<span class="k">"node"</span>:<span class="s">"node-0"</span>,"data":{"page_id":<span class="s">"0x4f2a"</span>,"op":<span class="s">"read"</span>,"tier":<span class="s">"remote"</span>}}
+{"event":"page_miss","time_ns":<span class="n">1840021</span>,"seq":<span class="n">89</span>,"data":{"page_id":<span class="s">"0x4f2a"</span>,"requested_tier":<span class="s">"local"</span>,"found_tier":<span class="s">"remote"</span>}}
+{"event":"transfer_begin","time_ns":<span class="n">1840021</span>,"seq":<span class="n">90</span>,"data":{"link":<span class="s">"node-0-cxl"</span>,"bytes":<span class="n">2097152</span>}}
+{"event":"transfer_complete","time_ns":<span class="n">1878933</span>,"seq":<span class="n">91</span>,"data":{"duration_ns":<span class="n">38912</span>,"queue_delay_ns":<span class="n">6144</span>}}
+{"event":"page_migrate_end","time_ns":<span class="n">1878933</span>,"seq":<span class="n">92</span>,"data":{"from_tier":<span class="s">"remote"</span>,"to_tier":<span class="s">"local"</span>,"bytes":<span class="n">2097152</span>}}</div>
+        </div>
+        <div class="tabpanel" data-panel="metrics">
+          <div class="code">{
+  <span class="k">"run_id"</span>: <span class="s">"01J8K2…"</span>,
+  <span class="k">"latency_ms"</span>: { <span class="k">"p50"</span>: <span class="n">205</span>, <span class="k">"p95"</span>: <span class="n">268</span>, <span class="k">"p99"</span>: <span class="n">388</span> },
+  <span class="k">"hit_ratio"</span>: { <span class="k">"local"</span>: <span class="n">0.91</span>, <span class="k">"remote"</span>: <span class="n">0.08</span> },
+  <span class="k">"remote_traffic_gib"</span>: <span class="n">1.84</span>,
+  <span class="k">"migration_gib"</span>: <span class="n">0.42</span>,
+  <span class="k">"fabric"</span>: {
+    <span class="k">"utilization"</span>: <span class="n">0.71</span>,
+    <span class="k">"max_queue_bytes"</span>: <span class="n">1887436</span>,
+    <span class="k">"congestion_events"</span>: <span class="n">12</span>
+  },
+  <span class="k">"baseline_delta"</span>: { <span class="k">"p95_pct"</span>: <span class="n">25</span>, <span class="k">"cost_pct"</span>: <span class="n">-31</span> },
+  <span class="k">"status"</span>: <span class="s">"ok"</span>
+}</div>
+        </div>
+        <div class="tabpanel" data-panel="manifest">
+          <div class="code">{
+  <span class="k">"run_id"</span>: <span class="s">"01J8K2…"</span>,
+  <span class="k">"rmemfab_version"</span>: <span class="s">"0.1.3"</span>,
+  <span class="k">"schema_version"</span>: <span class="s">"0.1"</span>,
+  <span class="k">"scenario_hash"</span>: <span class="s">"9f2c…a71d"</span>,
+  <span class="k">"seed"</span>: <span class="n">42</span>,
+  <span class="k">"started_at"</span>: <span class="s">"2026-11-04T18:20:11Z"</span>,
+  <span class="k">"events_processed"</span>: <span class="n">14200000</span>,
+  <span class="k">"virtual_time_ns"</span>: <span class="n">60000000000</span>,
+  <span class="k">"outputs"</span>: [<span class="s">"metrics.parquet"</span>, <span class="s">"events.jsonl"</span>],
+  <span class="k">"status"</span>: <span class="s">"complete"</span>
+}</div>
+        </div>
+      </div>
+      <div class="pipe-notes" id="pipeNotes"></div>
+    </div>
+    <div class="hards">
+      <div class="hard"><div class="n">01 / DETERMINISM</div><b>The comparison must be honest</b><p>One unseeded random call or an unstable sort and every policy comparison is invalid. This is tested, not assumed.</p></div>
+      <div class="hard"><div class="n">02 / CALIBRATION</div><b>The model must state its error</b><p>“CXL is around 180 ns” is a preset, not a result. Credibility comes from publishing where the simulation diverges from measured traces.</p></div>
+      <div class="hard"><div class="n">03 / GROUNDED AI</div><b>The model may propose; only the run may measure</b><p>The co-pilot reads telemetry and suggests a diff. It never reports a delta it did not obtain from a rerun.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="team">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Recruiting</div>
+      <h2>Three hires. Four seats.</h2>
+      <p>You plus three people. Every function lands on one of these seats — including the non-technical work, which is not optional.</p>
+    </div>
+    <div class="recruit-blurb">
+      <div class="h">Paste-ready intro for candidates</div>
+      <p>We're building <b>RmemFab</b>, a deterministic simulator that tells AI infra engineers whether remote memory — CXL or RDMA — actually helps their workload. You give it a scenario (nodes, tiers, links, workload, policy), it emits a seeded event stream, and the dashboard shows where the latency actually goes. Ten-day hackathon team, three layers: engine, dashboard, and a grounded AI co-pilot. We need people who care that the numbers survive a rerun.</p>
+    </div>
+    <div class="roles">
+      <div class="role">
+        <div class="role-top"><h3>Systems engineer</h3><span class="tag core">Hire 1 · core</span></div>
+        <p class="own">Owns the engine: event loop, local DRAM and remote tiers, fabric latency/bandwidth/queueing, LRU and hot/cold, determinism tests.</p>
+        <div class="kv">
+          <div class="k">Also owns</div><div class="v">Workload and hardware modeling: KV/MoE generators, CXL/RDMA presets, trace import, calibration.</div>
+          <div class="k">Needs</div><div class="v">Python, discrete-event/queueing intuition, profiler comfort. PyTorch/vLLM memory snapshots are a strong plus.</div>
+          <div class="k">48h</div><div class="v">Runnable engine on <span class="mono">llama-70b-cxl</span>, two same-seed runs produce identical p50/p95/p99.</div>
+        </div>
+        <div class="pitch">“You own the part judges can't fake: a deterministic engine whose numbers survive a rerun.”</div>
+      </div>
+      <div class="role">
+        <div class="role-top"><h3>Design engineer</h3><span class="tag core">Hire 2 · frontend + story</span></div>
+        <p class="own">Owns the dashboard: topology, run detail, latency curves, occupancy heatmaps, and the policy comparison view.</p>
+        <div class="kv">
+          <div class="k">Also owns</div><div class="v">UX flows, the visual system, the demo video and slide assets. This is where the non-technical craft lives on the build.</div>
+          <div class="k">Needs</div><div class="v">React/TypeScript, Tailwind, ECharts or visx, and real design taste. Must ship a polished screen in a day.</div>
+          <div class="k">48h</div><div class="v">Run detail page from a sample JSONL file, plus one comparison view that reads in ten seconds.</div>
+        </div>
+        <div class="pitch">“The engine emits truth; you make it legible — and make the demo look like a product, not a hackathon.”</div>
+      </div>
+      <div class="role">
+        <div class="role-top"><h3>AI / platform engineer</h3><span class="tag core">Hire 3 · co-pilot + backend</span></div>
+        <p class="own">Owns the co-pilot: natural language to scenario, grounded explanations with cited events, tool calls, and evals.</p>
+        <div class="kv">
+          <div class="k">Also owns</div><div class="v">FastAPI run API, background jobs, Modal sweep fan-out, run storage and share links.</div>
+          <div class="k">Needs</div><div class="v">LLM application engineering — structured outputs, function calling, tool evals — plus basic backend. Not a research scientist.</div>
+          <div class="k">48h</div><div class="v">One NL→schema-valid scenario and one explanation citing real events; a minimal run API.</div>
+        </div>
+        <div class="pitch">“You build the only LLM in the demo that is not allowed to invent a number.”</div>
+      </div>
+      <div class="role">
+        <div class="role-top"><h3>Product lead</h3><span class="tag you">You · 4th seat</span></div>
+        <p class="own">Owns the decision brief, scope, narrative, the 2-minute demo, the submission, and all sponsor/partner logistics.</p>
+        <div class="kv">
+          <div class="k">Also owns</div><div class="v">Recruiting, user interviews, integration glue, QA, and the writeup. This is the non-technical seat you keep.</div>
+          <div class="k">Needs</div><div class="v">Systems fluency, ruthless scope control, writing, live-demo discipline.</div>
+          <div class="k">48h</div><div class="v">A demo that runs end to end on one scenario without a network dependency.</div>
+        </div>
+        <div class="pitch">“You decide what we do not build — and you own every word the judges hear.”</div>
+      </div>
+    </div>
+
+    <div class="rolemap">
+      <div class="rm-row"><span class="f">Simulation core · memory hierarchy · determinism</span><span class="s">Systems</span></div>
+      <div class="rm-row"><span class="f">Workloads · hardware presets · trace import</span><span class="s">Systems</span></div>
+      <div class="rm-row"><span class="f">Frontend · data viz · interaction</span><span class="s design">Design</span></div>
+      <div class="rm-row"><span class="f">UX · visual identity · demo video · slides</span><span class="s design">Design</span></div>
+      <div class="rm-row"><span class="f">AI co-pilot · grounding · evals</span><span class="s">AI / Platform</span></div>
+      <div class="rm-row"><span class="f">API · jobs · Modal sweeps · share links</span><span class="s">AI / Platform</span></div>
+      <div class="rm-row"><span class="f">Narrative · demo · submission · partner credits</span><span class="s you">You</span></div>
+      <div class="rm-row"><span class="f">Recruiting · interviews · QA · release</span><span class="s you">You</span></div>
+    </div>
+
+    <div class="swap"><b>If you insist on a dedicated non-technical teammate:</b> swap the AI/Platform seat for a product/story person and take the co-pilot plus backend yourself. Only do this if you are confident shipping FastAPI and tool-calling in ten days. The design engineer still owns the frontend, and the story person must produce artifacts (video, copy, demo), not a strategy deck.</div>
+
+    <div class="hiretest">
+      <div><div class="h">Test · systems</div>Same scenario and seed must produce byte-identical metrics. Ask them to add one policy and one test.</div>
+      <div><div class="h">Test · design</div>Recreate the verdict screen from a sample JSONL in two hours. Judge the hierarchy, not the colors.</div>
+      <div><div class="h">Test · AI/platform</div>Turn one sentence into a schema-valid scenario and cite three real events in the explanation.</div>
+    </div>
+
+    <div class="donot"><span>Do not hire</span><span>a dedicated PM</span><span>a marketer</span><span>an ML researcher</span><span>a DevOps engineer</span><span>a separate QA</span></div>
+
+    <div class="baseline">
+      <div class="h">Shared baseline · everyone learns this in one weekend</div>
+      <ul>
+        <li>Discrete-event simulation with <span class="mono">heapq</span></li>
+        <li>Pydantic + JSON Schema validation</li>
+        <li>Reading a JSONL event stream without loading it all</li>
+        <li>One chart library, used well</li>
+        <li>Function calling with schema-validated output</li>
+        <li>Seeded randomness and reproducible tests</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="scope">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Scope</div>
+      <h2>What is in, what waits, what is cut.</h2>
+      <p>The demo must work offline and fit in two minutes. Everything else is negotiation.</p>
+    </div>
+    <div class="scope">
+      <div class="scope-col mvp">
+        <h3>Working demo</h3>
+        <div class="when">First 48 hours</div>
+        <ul>
+          <li>Scenario load + schema validation</li>
+          <li>Local DRAM vs remote pool, one fabric link type</li>
+          <li>LRU and hot/cold policies, same-seed compare</li>
+          <li>Synthetic KV decode workload</li>
+          <li>p50/p95/p99, hit ratio, fabric utilization</li>
+          <li>CLI run + one exported bundle</li>
+          <li>Minimal run detail view</li>
+        </ul>
+      </div>
+      <div class="scope-col">
+        <h3>Winning build</h3>
+        <div class="when">By day 10</div>
+        <ul>
+          <li>Prefetching + frequency-aware eviction</li>
+          <li>MoE profile and trace import</li>
+          <li>Fault injection and degraded-mode view</li>
+          <li>Modal sweep fan-out</li>
+          <li>Grounded co-pilot with cited events</li>
+          <li>Occupancy heatmap + comparison diff</li>
+          <li>Shareable run link</li>
+        </ul>
+      </div>
+      <div class="scope-col cut">
+        <h3>Explicitly cut</h3>
+        <div class="when">Say no out loud</div>
+        <ul>
+          <li>Rust/PyO3 hot path</li>
+          <li>WebGL rendering for huge traces</li>
+          <li>Multi-user auth and orgs</li>
+          <li>Cost model beyond a rough estimate</li>
+          <li>Real hardware calibration suite</li>
+          <li>Any feature that needs a live network during the demo</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">The 2-minute demo</div>
+      <h2>One scenario, one argument, one proof.</h2>
+      <p>Rehearse this until it fits. Every beat maps to a stage above.</p>
+    </div>
+    <div class="demo">
+      <div class="beat on">
+        <div class="t">0:00</div>
+        <div class="c"><b>The question</b><span>“KV cache no longer fits. Add nodes, or attach a CXL pool? Here is the threshold that decides it.”</span></div>
+      </div>
+      <div class="beat">
+        <div class="t">0:20</div>
+        <div class="c"><b>The scenario</b><span>Show the topology and the JSON side by side. Unit mistakes are impossible; the schema already validated it.</span></div>
+      </div>
+      <div class="beat">
+        <div class="t">0:40</div>
+        <div class="c"><b>The run</b><span>Run hot/cold against local-only with the same seed. Point at virtual time advancing — this is a model, not a spinner.</span></div>
+      </div>
+      <div class="beat">
+        <div class="t">1:00</div>
+        <div class="c"><b>The verdict</b><span>“p95 is 25% worse, but 61% of that is queueing on one link — not the pool.” Show the cliff on the timeline.</span></div>
+      </div>
+      <div class="beat">
+        <div class="t">1:20</div>
+        <div class="c"><b>The co-pilot</b><span>Ask where the stall comes from. It cites events, proposes a diff, reruns the same seed, reports the measured delta.</span></div>
+      </div>
+      <div class="beat">
+        <div class="t">1:40</div>
+        <div class="c"><b>The failure</b><span>Kill a node. The system degrades, does not collapse. Recovery time and throughput loss are numbers, not adjectives.</span></div>
+      </div>
+      <div class="beat">
+        <div class="t">1:55</div>
+        <div class="c"><b>The proof</b><span>Export the bundle: one command reproduces it byte-for-byte. Close on the decision, not the tech.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="close">
+  <div class="wrap">
+    <h2>If you can narrate this page, you can recruit for it and demo it.</h2>
+    <p>The frontend is not the product. The product is a decision an engineer can defend — and a run someone else can reproduce.</p>
+    <div class="btns">
+      <a class="btn primary" href="#lifecycle">Walk the lifecycle</a>
+      <a class="btn" href="ARCHITECTURE.md">Architecture</a>
+      <a class="btn" href="ROADMAP.md">Roadmap</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>RMEMFAB · lifecycle explorer · internal explainer</span>
+    <span>wireframes are sketches, not the product · mock numbers are for layout only</span>
+  </div>
+</footer>
+
+<script>
+const stages = [
+  { n: "01", short: "Frame", label: "Frame the question" },
+  { n: "02", short: "Describe", label: "Describe the system" },
+  { n: "03", short: "Workload", label: "Choose the workload" },
+  { n: "04", short: "Compare", label: "Choose what to compare" },
+  { n: "05", short: "Run", label: "Run the experiment" },
+  { n: "06", short: "Read", label: "Read the verdict" },
+  { n: "07", short: "Iterate", label: "Interrogate and iterate" },
+  { n: "08", short: "Stress", label: "Stress it with faults" },
+  { n: "09", short: "Ship", label: "Ship the evidence" }
+];
+
+const loop = document.getElementById("loop");
+const rail = document.getElementById("rail");
+stages.forEach((s, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.dataset.stage = String(i + 1);
+  b.innerHTML = '<span class="i">' + s.n + '</span>' + s.short;
+  b.addEventListener("click", () => go(i + 1));
+  loop.appendChild(b);
+
+  const r = document.createElement("button");
+  r.type = "button";
+  r.className = "rail-btn";
+  r.dataset.stage = String(i + 1);
+  r.innerHTML = '<span class="num">' + s.n + '</span><span>' + s.label + '</span>';
+  r.addEventListener("click", () => go(i + 1));
+  rail.appendChild(r);
+});
+const railFoot = document.createElement("div");
+railFoot.className = "rail-foot";
+railFoot.innerHTML = "Loop 06 → 09<br>until the decision holds.";
+rail.appendChild(railFoot);
+
+let current = 1;
+function setStage(n) {
+  current = Math.max(1, Math.min(stages.length, n));
+  document.querySelectorAll(".stage").forEach(el => el.classList.remove("active"));
+  document.getElementById("stage-" + current).classList.add("active");
+  document.querySelectorAll("[data-stage]").forEach(el => {
+    el.classList.toggle("active", Number(el.dataset.stage) === current);
+  });
+  document.getElementById("stageCount").textContent =
+    String(current).padStart(2, "0") + " / " + String(stages.length).padStart(2, "0");
+  const btn = document.querySelector('.rail-btn[data-stage="' + current + '"]');
+  if (btn && btn.scrollIntoView) {
+    const rect = btn.getBoundingClientRect();
+    if (rect.top < 70 || rect.bottom > window.innerHeight) {
+      btn.scrollIntoView({ block: "nearest" });
+    }
+  }
+}
+function go(n) {
+  setStage(n);
+  document.getElementById("lifecycle").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+document.getElementById("prevBtn").addEventListener("click", () => go(current - 1));
+document.getElementById("nextBtn").addEventListener("click", () => go(current + 1));
+document.addEventListener("keydown", e => {
+  if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    const box = document.getElementById("lifecycle").getBoundingClientRect();
+    if (box.top < window.innerHeight && box.bottom > 0) {
+      e.preventDefault();
+      go(current + (e.key === "ArrowRight" ? 1 : -1));
+    }
+  }
+});
+setStage(1);
+
+const heat = document.getElementById("heatmap");
+for (let i = 0; i < 96; i++) {
+  const cell = document.createElement("i");
+  const v = (Math.sin(i * 1.7 + 1) + Math.cos(i * 0.41)) / 2;
+  const a = 0.06 + Math.max(0, v) * 0.62;
+  cell.style.background = v > 0.62
+    ? "rgba(245,181,68," + (0.18 + v * 0.35) + ")"
+    : "rgba(110,231,215," + a + ")";
+  heat.appendChild(cell);
+}
+
+const policies = {
+  local_only: { p50: 190, p95: 214, p99: 241, d50: "baseline", d95: "baseline", d99: "baseline", v: "No remote capacity. This is the floor every other policy must beat." },
+  swap_remote: { p50: 240, p95: 410, p99: 690, d50: "+26% vs local", d95: "+92% vs local", d99: "+186% vs local", v: "Remote used as a backing store. Capacity wins, latency loses. Useful only as a naive baseline." },
+  hot_cold: { p50: 205, p95: 268, p99: 388, d50: "+8% vs local", d95: "+25% vs local", d99: "+61% vs local", v: "Remote read queueing on node-2-cxl accounts for 61% of added stall. Capacity is fine; the link is the problem." },
+  frequency_aware: { p50: 199, p95: 246, p99: 352, d50: "+5% vs local", d95: "+15% vs local", d99: "+46% vs local", v: "Protecting reused pages cuts tail latency, but migration traffic rises. Watch fabric utilization." },
+  predictive_prefetch: { p50: 196, p95: 232, p99: 318, d50: "+3% vs local", d95: "+8% vs local", d99: "+32% vs local", v: "Prefetching hides sequential KV reads. Wasted-page ratio is the number to check before trusting it." },
+  cost_aware: { p50: 203, p95: 258, p99: 371, d50: "+7% vs local", d95: "+21% vs local", d99: "+54% vs local", v: "Trades a little latency for lower transfer cost. Only meaningful once the cost model is calibrated." }
+};
+const chipWrap = document.getElementById("polChips");
+Object.keys(policies).forEach((name, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.dataset.policy = name;
+  b.textContent = name;
+  if (name === "hot_cold") b.className = "on";
+  b.addEventListener("click", () => {
+    document.querySelectorAll("#polChips button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    const p = policies[name];
+    document.getElementById("m50").innerHTML = p.p50 + '<small>ms</small>';
+    document.getElementById("m95").innerHTML = p.p95 + '<small>ms</small>';
+    document.getElementById("m99").innerHTML = p.p99 + '<small>ms</small>';
+    document.getElementById("d50").textContent = p.d50;
+    document.getElementById("d95").textContent = p.d95;
+    document.getElementById("d99").textContent = p.d99;
+    document.getElementById("verdict").textContent = p.v;
+    const m95 = document.querySelector("#stage-6 .metric.bad");
+    if (m95) m95.classList.toggle("bad", name !== "local_only");
+  });
+  chipWrap.appendChild(b);
+});
+
+const pipeContent = {
+  scenario: [
+    ["Scenario is the contract", "Nodes, tiers, links, workload, policy, faults, seed. Validated before a single event is scheduled."],
+    ["Immutable and hashed", "The normalized scenario produces a hash that travels with the run. Same hash plus same seed equals the same simulation."],
+    ["No invisible defaults", "Latency, bandwidth, page size, and queue depth are explicit. If a preset is used, it is resolved into numbers you can read."]
+  ],
+  events: [
+    ["Every access becomes events", "page_access, page_hit, page_miss, transfer_begin, transfer_complete, page_migrate_end. The log is the ground truth."],
+    ["Ordered and complete", "Events are emitted in nondecreasing virtual time. Begin/end pairs are guaranteed unless a fault interrupts them."],
+    ["Streamable by design", "JSONL for inspection, Parquet for analysis. Long runs can omit the event log and keep only summary metrics."]
+  ],
+  metrics: [
+    ["Aggregated, not invented", "Percentiles, hit ratios, traffic, and utilization are computed over event windows. Every metric can be traced back to events."],
+    ["Baseline-aware", "Each comparison run reports its delta against the pinned baseline. The UI should never show an absolute number without its delta."],
+    ["Honest about tail", "p50 can look fine while p99 doubles. The verdict must explain the tail, not average it away."]
+  ],
+  manifest: [
+    ["Reproducibility receipt", "Run ID, tool version, schema version, scenario hash, seed, event count, and virtual time."],
+    ["Outputs declared", "The manifest lists exactly which artifacts exist, so a share link cannot point at a missing or stale metric file."],
+    ["The demo's proof", "One command reruns the bundle. If the metrics are not identical, the tool says so loudly."]
+  ]
+};
+const notesWrap = document.getElementById("pipeNotes");
+function renderNotes(key) {
+  notesWrap.innerHTML = "";
+  pipeContent[key].forEach((item, i) => {
+    const d = document.createElement("div");
+    d.className = "pipe-note";
+    d.innerHTML = '<div class="n">0' + (i + 1) + '</div><div><b>' + item[0] + '</b>' + item[1] + '</div>';
+    notesWrap.appendChild(d);
+  });
+}
+document.querySelectorAll("#tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#tabs button").forEach(b => b.classList.remove("on"));
+    document.querySelectorAll(".tabpanel").forEach(p => p.classList.remove("on"));
+    btn.classList.add("on");
+    const panel = document.querySelector('[data-panel="' + btn.dataset.tab + '"]');
+    if (panel) panel.classList.add("on");
+    renderNotes(btn.dataset.tab);
+  });
+});
+renderNotes("scenario");
+</script>
+</body>
+</html>
