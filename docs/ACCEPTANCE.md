@@ -204,6 +204,10 @@ Pass condition: replay reproduces the recorded allocation/free sequence, reports
 
 Pass condition: one trace captured on real hardware (for example vLLM on a Modal GPU) is committed or linked with its capture metadata and SHA-256. It does not need to be large. It must be real.
 
+**Evidence:** [`examples/traces/20261029T202303Z-opt-125m/kv_trace.jsonl`](../examples/traces/20261029T202303Z-opt-125m/kv_trace.jsonl) (SHA-256 `6b24f887f28524bce3734a33b27af60918786669a0281601e24c7a1880a35eca`) and its [`manifest.json`](../examples/traces/20261029T202303Z-opt-125m/manifest.json). Captured by `infra/modal/capture.py` on a Modal A10G with `facebook/opt-125m`, 512 prompt tokens, 32 generated tokens, concurrency 4, vLLM `dev` / torch `2.4.0+cu121`. The allocator trace and snapshot remain on the `rmemfab-traces` Modal volume; their SHA-256 values are in the manifest. Replay evidence is still pending under A4.4.
+
+**Additional evidence:** [`examples/traces/20261030T000445Z-muse-glimmer-derived/`](../examples/traces/20261030T000445Z-muse-glimmer-derived/) contains a Muse Glimmer run and a geometry-derived KV trace. It is not a vLLM block-table trace; see [`docs/MUSE_GLIMMER_CAPTURE_REPORT.md`](MUSE_GLIMMER_CAPTURE_REPORT.md). The OPT trace above remains the direct block-table capture for A4.5.
+
 ## A5 — Explainability
 
 ### A5.1 Causal chain
@@ -361,7 +365,7 @@ Share links point at bundles, not at screenshots. The co-pilot reads bundles; it
 1. The queue equation in `docs/SIMULATION-MODEL.md` must resolve the `link_free_at` versus `backlog/B` ambiguity (A1.3).
 2. Shared pool contention is not defined (A1.4).
 3. Provenance is now accepted by the schema but not yet enforced by a validator (A2.1).
-4. There is no measured trace in the repository (A4.5).
+4. Replay has not yet been demonstrated against either repository trace (A4.4). The Muse Glimmer trace is geometry-derived and must not be represented as physical block-table telemetry.
 5. There is no `explain` implementation or attribution definition beyond this document (A5).
 6. Determinism is specified but not yet proven in CI (A6.1).
 7. The co-pilot eval set does not exist (A5.5).

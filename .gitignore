@@ -25,6 +25,8 @@ runs/
 *.parquet
 *.duckdb
 !examples/*.json
+!examples/traces/**/*.json
+!examples/traces/**/*.jsonl
 
 # Editors and OS
 .vscode/

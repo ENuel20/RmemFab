@@ -197,8 +197,17 @@ RmemFab/
     ├── llama-70b-cxl.json
     ├── moe-remote-tiering.json
     ├── policy-prefetch-failure.json
-    └── phase1-overflow.json   # deliberately undersized local tier; proves the remote path
+    ├── phase1-overflow.json   # deliberately undersized local tier; proves the remote path
+    └── traces/
+        ├── 20261029T202303Z-opt-125m/
+            ├── kv_trace.jsonl  # measured vLLM block-table trace (A4.5)
+            └── manifest.json   # capture metadata and SHA-256
+        └── 20261030T000445Z-muse-glimmer-derived/
+            ├── kv_trace.jsonl  # geometry-derived workload; not a block-table trace
+            └── manifest.json   # measured run metadata and file hashes
 ```
+
+The Glimmer concurrency summary and captured per-setting manifests are in [`examples/experiments/muse-glimmer-stress/`](examples/experiments/muse-glimmer-stress/). The Glimmer page accesses are derived from request token counts and model geometry; see the [capture report](docs/MUSE_GLIMMER_CAPTURE_REPORT.md) for evidence and limitations.
 
 The core engine, API, and dashboard directories will be added as implementation lands. Specs are written first so the engine and UI can be developed independently.
 
