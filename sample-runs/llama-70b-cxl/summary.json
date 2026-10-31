@@ -1,0 +1,208 @@
+{
+  "access": {
+    "bypass_reads": 0,
+    "count": 42013607,
+    "latency_ns": {
+      "count": 42013607,
+      "max": 14583806.159737,
+      "mean": 36535.195762,
+      "min": 5332.88,
+      "p50": 5362.231684,
+      "p95": 5362.231684,
+      "p99": 5362.231684
+    },
+    "local_hit_ratio": 1,
+    "local_hits": 41874013,
+    "miss_ratio": 0,
+    "misses": 0,
+    "page_allocations": 100049,
+    "ratio_denominator": "page read accesses",
+    "reads": 41874013,
+    "remote_hit_ratio": 0,
+    "remote_hits": 0,
+    "remote_writes": 0,
+    "stall_ns": 656219545899.1487,
+    "total_accesses_incl_warmup": 45583443,
+    "warmup": {
+      "note": "equal all/steady counts mean no samples fell in the warmup window; the filter still ran",
+      "samples_all": 45583443,
+      "samples_in_warmup": 3569836,
+      "samples_steady_state": 42013607
+    },
+    "writes": 139594
+  },
+  "cost": null,
+  "decode_step_latency_ns": {
+    "count": 61514,
+    "max": 18050178.159738,
+    "mean": 14277692.142695,
+    "min": 10493459.559887,
+    "p50": 14328310.492896,
+    "p95": 14616309.533803,
+    "p99": 18013022.067083
+  },
+  "events_processed": 68020,
+  "links": {
+    "node-0-cxl": {
+      "backpressure_stall_ns": 0,
+      "busy_ns": 0,
+      "bytes_in": 0,
+      "bytes_out": 0,
+      "congested_events": 0,
+      "max_queue_bytes": 0,
+      "node": "node-0",
+      "queue_overflow_events": 0,
+      "service_admitted_ns": 0,
+      "time_weighted_queue_bytes": 0,
+      "utilization": 0
+    },
+    "node-1-cxl": {
+      "backpressure_stall_ns": 0,
+      "busy_ns": 0,
+      "bytes_in": 0,
+      "bytes_out": 0,
+      "congested_events": 0,
+      "max_queue_bytes": 0,
+      "node": "node-1",
+      "queue_overflow_events": 0,
+      "service_admitted_ns": 0,
+      "time_weighted_queue_bytes": 0,
+      "utilization": 0
+    },
+    "node-2-cxl": {
+      "backpressure_stall_ns": 0,
+      "busy_ns": 0,
+      "bytes_in": 0,
+      "bytes_out": 0,
+      "congested_events": 0,
+      "max_queue_bytes": 0,
+      "node": "node-2",
+      "queue_overflow_events": 0,
+      "service_admitted_ns": 0,
+      "time_weighted_queue_bytes": 0,
+      "utilization": 0
+    },
+    "node-3-cxl": {
+      "backpressure_stall_ns": 0,
+      "busy_ns": 0,
+      "bytes_in": 0,
+      "bytes_out": 0,
+      "congested_events": 0,
+      "max_queue_bytes": 0,
+      "node": "node-3",
+      "queue_overflow_events": 0,
+      "service_admitted_ns": 0,
+      "time_weighted_queue_bytes": 0,
+      "utilization": 0
+    }
+  },
+  "memory": {
+    "node-0": {
+      "bandwidth_utilization": 0.997777,
+      "capacity_pages": 262144,
+      "evicted_pages": 0,
+      "final_used_pages": 2701,
+      "installed_pages": 0,
+      "max_queue_bytes": 7196635264,
+      "peak_used_pages": 3442
+    },
+    "node-1": {
+      "bandwidth_utilization": 0.994027,
+      "capacity_pages": 262144,
+      "evicted_pages": 0,
+      "final_used_pages": 2692,
+      "installed_pages": 0,
+      "max_queue_bytes": 7169624576,
+      "peak_used_pages": 3429
+    },
+    "node-2": {
+      "bandwidth_utilization": 0.993088,
+      "capacity_pages": 262144,
+      "evicted_pages": 0,
+      "final_used_pages": 2690,
+      "installed_pages": 0,
+      "max_queue_bytes": 7140336304,
+      "peak_used_pages": 3415
+    },
+    "node-3": {
+      "bandwidth_utilization": 0.992514,
+      "capacity_pages": 262144,
+      "evicted_pages": 0,
+      "final_used_pages": 2686,
+      "installed_pages": 0,
+      "max_queue_bytes": 5813960352,
+      "peak_used_pages": 2783
+    }
+  },
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": "'hot_cold' is a later-phase policy; 'swap_remote' ran instead",
+    "requested": "hot_cold",
+    "version": "1"
+  },
+  "pool": {
+    "bytes_served": 0,
+    "capacity_pages": 2097152,
+    "final_used_pages": 0,
+    "max_queue_bytes": 0,
+    "peak_used_pages": 0,
+    "service_admitted_ns": 0,
+    "utilization": 0
+  },
+  "requests": {
+    "arrived": 477,
+    "completed": 124,
+    "completed_steady": 122,
+    "in_flight_at_end": 16,
+    "latency_ns": {
+      "count": 122,
+      "max": 45396299280,
+      "mean": 24955903968.139343,
+      "min": 4733464376,
+      "p50": 23747530390.359566,
+      "p95": 44009215466.406906,
+      "p99": 45342738704.2545
+    },
+    "queued_at_end": 337,
+    "reject_reasons": {},
+    "rejected": 0,
+    "throughput_per_s": 2.218182,
+    "tokens_per_s": 1135.709091
+  },
+  "rmemfab_version": "0.1.0",
+  "run_id": "0efe1dc513a6-s42-swap_remote",
+  "scenario": "llama-70b-cxl",
+  "scenario_hash": "0efe1dc513a63d30e1a576cecfc7f18de14c62473486730068da4fba875d5e13",
+  "schema": "rmemfab.summary/0.1",
+  "seed": 42,
+  "series_points": 600,
+  "time": {
+    "steady_window_ns": 55000000000,
+    "virtual_time_ns": 60000000000,
+    "warmup_ns": 5000000000
+  },
+  "traffic": {
+    "evict_bytes": 0,
+    "evictions_dirty_by_construction": true,
+    "install_bytes": 0,
+    "migration_bytes": 0,
+    "prefetch_bytes": 0,
+    "remote_read_bytes": 0,
+    "remote_read_demand_bytes": 0,
+    "remote_read_migration_bytes": 0,
+    "remote_write_bytes": 0,
+    "spill_bytes": 0,
+    "spilled_pages": 0,
+    "transfer_bytes": 2097152,
+    "transfer_granularity": "page",
+    "wasted_prefetch_bytes": 0
+  },
+  "workload": {
+    "kv_bytes_per_request_at_full_context": 1509949440,
+    "kv_bytes_per_token": 327680,
+    "kv_formula": "2 * layers * kv_heads * head_dim * dtype_bytes",
+    "page_size_bytes": 2097152,
+    "pages_per_request_max": 720
+  },
+  "workload_label": "synthetic"
+}

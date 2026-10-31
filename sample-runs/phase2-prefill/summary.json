@@ -1,0 +1,178 @@
+{
+  "access": {
+    "bypass_reads": 0,
+    "count": 16932,
+    "latency_ns": {
+      "count": 16932,
+      "max": 1053908.88,
+      "mean": 15407.433725,
+      "min": 5332.88,
+      "p50": 5362.231684,
+      "p95": 5362.231684,
+      "p99": 5362.231684
+    },
+    "local_hit_ratio": 1,
+    "local_hits": 15936,
+    "miss_ratio": 0,
+    "misses": 0,
+    "page_allocations": 2532,
+    "ratio_denominator": "page read accesses",
+    "reads": 15936,
+    "remote_hit_ratio": 0,
+    "remote_hits": 0,
+    "remote_writes": 0,
+    "stall_ns": 170582343.680001,
+    "total_accesses_incl_warmup": 16932,
+    "warmup": {
+      "note": "equal all/steady counts mean no samples fell in the warmup window; the filter still ran",
+      "samples_all": 16932,
+      "samples_in_warmup": 0,
+      "samples_steady_state": 16932
+    },
+    "writes": 996
+  },
+  "cost": {
+    "capacity": 0.000613,
+    "currency": "USD",
+    "migration": 0,
+    "total": 0.000613,
+    "transfer": 0
+  },
+  "events_processed": 605,
+  "links": {
+    "node-0-cxl": {
+      "backpressure_stall_ns": 0,
+      "busy_ns": 0,
+      "bytes_in": 0,
+      "bytes_out": 0,
+      "congested_events": 0,
+      "max_queue_bytes": 0,
+      "node": "node-0",
+      "queue_overflow_events": 0,
+      "service_admitted_ns": 0,
+      "time_weighted_queue_bytes": 0,
+      "utilization": 0
+    }
+  },
+  "memory": {
+    "node-0": {
+      "bandwidth_utilization": 0.044386,
+      "capacity_pages": 32768,
+      "evicted_pages": 0,
+      "final_used_pages": 1556,
+      "installed_pages": 0,
+      "max_queue_bytes": 427819008,
+      "peak_used_pages": 1636
+    }
+  },
+  "op_latency_ns": {
+    "count": 249,
+    "max": 1069907.52,
+    "mean": 1047705.493333,
+    "min": 1023912.96,
+    "p50": 1056805.471201,
+    "p95": 1069907.52,
+    "p99": 1069907.52
+  },
+  "ops": {
+    "after_end": null,
+    "alloc_fail_reasons": {},
+    "alloc_failed": 0,
+    "anomalies": {},
+    "executed": {
+      "alloc": 174,
+      "free": 162,
+      "read": 83,
+      "write": 166
+    },
+    "ignored_recorded_ops": {
+      "evict": 0,
+      "migrate": 0,
+      "prefetch": 0
+    },
+    "implicit_alloc_bytes": 0,
+    "total_in_source": 585
+  },
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "pool": {
+    "bytes_served": 0,
+    "capacity_pages": 32768,
+    "final_used_pages": 0,
+    "max_queue_bytes": 0,
+    "peak_used_pages": 0,
+    "service_admitted_ns": 0,
+    "utilization": 0
+  },
+  "replay": {
+    "backpressure": {
+      "mode": "stall",
+      "ops_unissued_due_to_stall": false,
+      "source_slip_ns": 0
+    },
+    "executed_alloc_free_records": 336,
+    "executed_alloc_free_sha256": "af9be0fb1a9059bf49bb0b4360b9c657bbda334f9d21d31c693badb614616fcd"
+  },
+  "requests": {
+    "distinct_request_ids": 11
+  },
+  "rmemfab_version": "0.1.0",
+  "run_id": "03cd3d0d6ede-s3-swap_remote",
+  "scenario": "phase2-prefill",
+  "scenario_hash": "03cd3d0d6ede1d9341cfb9edb9d2be693b14acef0ea1113240e1368a70de5170",
+  "schema": "rmemfab.summary/0.1",
+  "seed": 3,
+  "series_points": 20,
+  "time": {
+    "steady_window_ns": 2000000000,
+    "virtual_time_ns": 2000000000,
+    "warmup_ns": 0
+  },
+  "traffic": {
+    "evict_bytes": 0,
+    "evictions_dirty_by_construction": true,
+    "install_bytes": 0,
+    "migration_bytes": 0,
+    "prefetch_bytes": 0,
+    "remote_read_bytes": 0,
+    "remote_read_demand_bytes": 0,
+    "remote_read_migration_bytes": 0,
+    "remote_write_bytes": 0,
+    "spill_bytes": 0,
+    "spilled_objects": 0,
+    "transfer_bytes": {
+      "count": 0,
+      "max": 0,
+      "mean": 0,
+      "page_size_bytes": 2097152
+    },
+    "transfer_granularity": "object",
+    "wasted_prefetch_bytes": 0
+  },
+  "workload": {
+    "generator": {
+      "defaulted_parameters": [
+        {
+          "parameter": "workload.model.weight_bytes_per_layer",
+          "value": "12 * hidden_size^2 * dtype_bytes (dense-layer approximation)"
+        }
+      ],
+      "mode": "open_loop_ops",
+      "page_normalization": {
+        "added_bytes": 0,
+        "records": 0
+      },
+      "profile": "prefill"
+    },
+    "live_objects_at_end": 12,
+    "page_size_bytes": 2097152,
+    "profile": "prefill",
+    "type": "synthetic"
+  },
+  "workload_kind": "replay",
+  "workload_label": "synthetic"
+}

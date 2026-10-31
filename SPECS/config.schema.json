@@ -475,6 +475,12 @@
         "sort": {
           "type": "boolean"
         },
+        "backpressure": {
+          "enum": [
+            "stall",
+            "report"
+          ]
+        },
         "round_bytes": {
           "type": "boolean"
         },

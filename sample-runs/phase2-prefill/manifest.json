@@ -1,0 +1,106 @@
+{
+  "assumed_parameters": [
+    {
+      "path": "nodes[0].local_memory",
+      "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+      "uncertainty_pct": 25
+    },
+    {
+      "path": "nodes[1].remote_memory",
+      "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+      "uncertainty_pct": 30
+    },
+    {
+      "path": "fabric.links[0]",
+      "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+      "uncertainty_pct": 30
+    }
+  ],
+  "backpressure": "stall",
+  "defaulted_parameters": [
+    {
+      "parameter": "workload.model.weight_bytes_per_layer",
+      "value": "12 * hidden_size^2 * dtype_bytes (dense-layer approximation)"
+    }
+  ],
+  "event_count": 605,
+  "events_logged": 0,
+  "generator": {
+    "defaulted_parameters": [
+      {
+        "parameter": "workload.model.weight_bytes_per_layer",
+        "value": "12 * hidden_size^2 * dtype_bytes (dense-layer approximation)"
+      }
+    ],
+    "mode": "open_loop_ops",
+    "page_normalization": {
+      "added_bytes": 0,
+      "records": 0
+    },
+    "profile": "prefill"
+  },
+  "hit_ratio_denominator": "page_read_accesses",
+  "host": {
+    "numpy": "2.4.4",
+    "platform": "Linux",
+    "python": "3.12.3"
+  },
+  "label_note": null,
+  "node_map": {},
+  "outputs": {
+    "events": null,
+    "scenario": "scenario.json",
+    "series": "series.jsonl",
+    "summary": "summary.json"
+  },
+  "page_normalization": {
+    "added_bytes": 0,
+    "records": 0
+  },
+  "percentile_method": "nearest_rank_log_bucket_upper_edge_1pct",
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "replay_semantics": "open-loop with backpressure: operations execute at their recorded/generated times; simulated latency does not delay later operations, but a link queue above queue_depth_bytes stalls the whole op stream until it has room",
+  "rmemfab_version": "0.1.0",
+  "scenario_assumptions": [
+    "Hardware values are docs/HARDWARE-MODELS.md presets, not measurements.",
+    "Workload is synthetic; it is not a captured serving trace.",
+    "Operation timing uses requests.tokens_per_second (assumed 50 when omitted); replay is open-loop.",
+    "Per-layer weight bytes default to 12 * hidden_size^2 * dtype_bytes."
+  ],
+  "scenario_hash": "03cd3d0d6ede1d9341cfb9edb9d2be693b14acef0ea1113240e1368a70de5170",
+  "scenario_name": "phase2-prefill",
+  "schema_version": "0.1",
+  "seed": 3,
+  "shared_pool_model": "shared_byte_server",
+  "status": "completed",
+  "stream_seeds": {
+    "fabric": [
+      17058895752279943796,
+      14914061587547594089
+    ],
+    "faults": [
+      1216009372136524026,
+      13849303191714579182
+    ],
+    "policy": [
+      18443715169928553612,
+      8822577451776050810
+    ],
+    "workload": [
+      14449357594836781232,
+      7415122299322209779
+    ]
+  },
+  "trace_hashes": [],
+  "trace_header": null,
+  "transfer_granularity": "object",
+  "virtual_time_ns": 2000000000,
+  "warmup_ns": 0,
+  "warnings": [],
+  "workload_label": "synthetic"
+}

@@ -58,3 +58,9 @@ Two scenarios that differ only in formatting must hash identically.
 ## Example scenarios
 
 [`../examples/llama-70b-cxl.json`](../examples/llama-70b-cxl.json) and [`../examples/moe-remote-tiering.json`](../examples/moe-remote-tiering.json) are normative examples: they must validate against the schemas in this directory.
+
+## Additive fields used by the implementation
+
+- Trace header: `label` (`synthetic | measured | calibrated`), `ts_origin_ns` (integer; replaces the default shift of the first record to t=0), `source_sha256`, `generator`, `conversion`, `normalized_from_sha256`, `normalization`.
+- Scenario `workload`: `sort`, `round_bytes`, `time_scale`, `backpressure` (`stall | report`). `workload.requests` (schema allows extra keys): `tokens_per_second`, `prefill_tokens_per_second`, `kv_block_pages`. `workload.model`: `weight_bytes_per_layer`, `popularity_weights`.
+- Event payloads: `pages`, `pages_remote`, `step_ns`, `cause`, `objects`, `implicit`, `pages_spilled_remote`, `spilled`; `page_spill`, `alloc_failed` and `request_rejected` events. `page_migrate_begin` / `page_migrate_end` also carry `pages`.

@@ -1,0 +1,142 @@
+{
+  "access": {
+    "bypass_reads": 23287,
+    "count": 118097,
+    "latency_ns": {
+      "count": 118097,
+      "max": 349345310.666664,
+      "mean": 1759513.766676,
+      "min": 5332.88,
+      "p50": 44205.551828,
+      "p95": 44205.551828,
+      "p99": 44205.551828
+    },
+    "local_hit_ratio": 0.00013,
+    "local_hits": 15,
+    "miss_ratio": 0,
+    "misses": 0,
+    "page_allocations": 5137,
+    "ratio_denominator": "page read accesses",
+    "reads": 115447,
+    "remote_hit_ratio": 0.99987,
+    "remote_hits": 115432,
+    "remote_writes": 587,
+    "stall_ns": 32451925699.54708,
+    "total_accesses_incl_warmup": 130913,
+    "warmup": {
+      "note": "equal all/steady counts mean no samples fell in the warmup window; the filter still ran",
+      "samples_all": 130913,
+      "samples_in_warmup": 12816,
+      "samples_steady_state": 118097
+    },
+    "writes": 2650
+  },
+  "cost": null,
+  "decode_step_latency_ns": {
+    "count": 90,
+    "max": 403570687.666672,
+    "mean": 367299278.962968,
+    "min": 201457663.666667,
+    "p50": 403570687.666672,
+    "p95": 403570687.666672,
+    "p99": 403570687.666672
+  },
+  "events_processed": 697,
+  "links": {
+    "node-0-cxl": {
+      "backpressure_stall_ns": 357791709.000002,
+      "busy_ns": 9401144079,
+      "bytes_in": 257125515264,
+      "bytes_out": 212768653312,
+      "congested_events": 205,
+      "max_queue_bytes": 4301478176,
+      "node": "node-0",
+      "queue_overflow_events": 205,
+      "service_admitted_ns": 9789461845.333324,
+      "time_weighted_queue_bytes": 1220999580.576558,
+      "utilization": 0.470057
+    }
+  },
+  "memory": {
+    "node-0": {
+      "bandwidth_utilization": 0.107376,
+      "capacity_pages": 1024,
+      "evicted_pages": 100353,
+      "final_used_pages": 1024,
+      "installed_pages": 97264,
+      "max_queue_bytes": 6351513024,
+      "peak_used_pages": 1024
+    }
+  },
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "pool": {
+    "bytes_served": 469894168576,
+    "capacity_pages": 524288,
+    "final_used_pages": 4113,
+    "max_queue_bytes": 21496706416,
+    "peak_used_pages": 4113,
+    "service_admitted_ns": 9789461845.33334,
+    "utilization": 0.940114
+  },
+  "requests": {
+    "arrived": 12,
+    "completed": 0,
+    "completed_steady": 0,
+    "in_flight_at_end": 4,
+    "latency_ns": {
+      "count": 0,
+      "max": 0,
+      "mean": 0,
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "queued_at_end": 8,
+    "reject_reasons": {},
+    "rejected": 0,
+    "throughput_per_s": 0,
+    "tokens_per_s": 0
+  },
+  "rmemfab_version": "0.1.0",
+  "run_id": "ed870a82c6a9-s7-swap_remote",
+  "scenario": "phase1-overflow",
+  "scenario_hash": "ed870a82c6a9f6f293861c2d5cf9fd95f3d7809f554bfe358d3ff065d84c9cdf",
+  "schema": "rmemfab.summary/0.1",
+  "seed": 7,
+  "series_points": 100,
+  "time": {
+    "steady_window_ns": 9000000000,
+    "virtual_time_ns": 10000000000,
+    "warmup_ns": 1000000000
+  },
+  "traffic": {
+    "evict_bytes": 210455494656,
+    "evictions_dirty_by_construction": true,
+    "install_bytes": 203977392128,
+    "migration_bytes": 414432886784,
+    "prefetch_bytes": 0,
+    "remote_read_bytes": 257125515264,
+    "remote_read_demand_bytes": 53148123136,
+    "remote_read_migration_bytes": 203977392128,
+    "remote_write_bytes": 212768653312,
+    "spill_bytes": 2147483648,
+    "spilled_pages": 1024,
+    "transfer_bytes": 2097152,
+    "transfer_granularity": "page",
+    "wasted_prefetch_bytes": 0
+  },
+  "workload": {
+    "kv_bytes_per_request_at_full_context": 2726297600,
+    "kv_bytes_per_token": 327680,
+    "kv_formula": "2 * layers * kv_heads * head_dim * dtype_bytes",
+    "page_size_bytes": 2097152,
+    "pages_per_request_max": 1300
+  },
+  "workload_label": "synthetic"
+}

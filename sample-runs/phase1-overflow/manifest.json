@@ -1,0 +1,82 @@
+{
+  "assumed_parameters": [
+    {
+      "path": "nodes[0].local_memory",
+      "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+      "uncertainty_pct": null
+    },
+    {
+      "path": "nodes[1].remote_memory",
+      "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+      "uncertainty_pct": 30
+    },
+    {
+      "path": "fabric.links[0]",
+      "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+      "uncertainty_pct": 30
+    }
+  ],
+  "event_count": 697,
+  "events_logged": 0,
+  "hit_ratio_denominator": "page_read_accesses",
+  "host": {
+    "numpy": "2.4.4",
+    "platform": "Linux",
+    "python": "3.12.3"
+  },
+  "limitations": [
+    "Fabric: each compute->pool link is a FIFO byte server and the pool is a shared byte server (aggregate pool service never exceeds pool bandwidth).",
+    "Requests larger than local DRAM spill their overflow pages to the pool (swap_remote only); a spilled newest page makes each KV append a fabric write.",
+    "Closed-loop: the issuing request blocks until its transfer completes, so queue_depth_bytes backpressure is inherent; excess is still reported as queue_overflow_events / backpressure_stall_ns.",
+    "Percentiles come from a log-bucket histogram (upper bucket edge, <=1% relative error, never under-reports)."
+  ],
+  "outputs": {
+    "events": null,
+    "scenario": "scenario.json",
+    "series": "series.jsonl",
+    "summary": "summary.json"
+  },
+  "percentile_method": "nearest_rank_log_bucket_upper_edge_1pct",
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "rmemfab_version": "0.1.0",
+  "scenario_assumptions": [
+    "Local capacity is intentionally set to 2 GiB to force overflow. A real H100 node has far more DRAM; this scenario exists only to exercise the remote path.",
+    "One compute node and one shared pool keep the event stream small enough to inspect by hand.",
+    "The workload is synthetic KV-cache decode derived from Llama-3-70B geometry, not a captured trace.",
+    "The compute tokens_per_second field is omitted, matching examples/llama-70b-cxl.json. Request duration is therefore driven by modeled memory accesses, not accelerator throughput."
+  ],
+  "scenario_hash": "ed870a82c6a9f6f293861c2d5cf9fd95f3d7809f554bfe358d3ff065d84c9cdf",
+  "scenario_name": "phase1-overflow",
+  "schema_version": "0.1",
+  "seed": 7,
+  "shared_pool_model": "shared_byte_server",
+  "status": "completed",
+  "stream_seeds": {
+    "fabric": [
+      6823953754371609207,
+      15549341456297449710
+    ],
+    "faults": [
+      17559002276220262541,
+      3147876876828449332
+    ],
+    "policy": [
+      4042502035264064771,
+      18081263350903326076
+    ],
+    "workload": [
+      3386250816931739734,
+      17579791024057999317
+    ]
+  },
+  "trace_hashes": [],
+  "virtual_time_ns": 10000000000,
+  "warmup_ns": 1000000000,
+  "warnings": [],
+  "workload_label": "synthetic"
+}

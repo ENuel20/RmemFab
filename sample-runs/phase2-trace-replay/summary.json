@@ -1,0 +1,181 @@
+{
+  "access": {
+    "bypass_reads": 0,
+    "count": 16400,
+    "latency_ns": {
+      "count": 16400,
+      "max": 2796563.333335,
+      "mean": 1835194.24722,
+      "min": 5332.88,
+      "p50": 2099760.898145,
+      "p95": 2796563.333335,
+      "p99": 2796563.333335
+    },
+    "local_hit_ratio": 0.108081,
+    "local_hits": 1712,
+    "miss_ratio": 0,
+    "misses": 0,
+    "page_allocations": 560,
+    "ratio_denominator": "page read accesses",
+    "reads": 15840,
+    "remote_hit_ratio": 0.891919,
+    "remote_hits": 14128,
+    "remote_writes": 0,
+    "stall_ns": 1823690987.400054,
+    "total_accesses_incl_warmup": 16400,
+    "warmup": {
+      "note": "equal all/steady counts mean no samples fell in the warmup window; the filter still ran",
+      "samples_all": 16400,
+      "samples_in_warmup": 0,
+      "samples_steady_state": 16400
+    },
+    "writes": 560
+  },
+  "cost": {
+    "capacity": 0.000133,
+    "currency": "USD",
+    "migration": 0.055813,
+    "total": 0.167571,
+    "transfer": 0.111625
+  },
+  "events_processed": 4677,
+  "links": {
+    "node-0-cxl": {
+      "backpressure_stall_ns": 9657310.333333,
+      "busy_ns": 1248504490.666669,
+      "bytes_in": 29628563456,
+      "bytes_out": 30299652096,
+      "congested_events": 1786,
+      "max_queue_bytes": 100663328,
+      "node": "node-0",
+      "queue_overflow_events": 228,
+      "service_admitted_ns": 1248504490.666669,
+      "time_weighted_queue_bytes": 12102434.168912,
+      "utilization": 0.208084
+    }
+  },
+  "memory": {
+    "node-0": {
+      "bandwidth_utilization": 0.053911,
+      "capacity_pages": 128,
+      "evicted_pages": 14448,
+      "final_used_pages": 128,
+      "installed_pages": 14128,
+      "max_queue_bytes": 201326592,
+      "peak_used_pages": 128
+    }
+  },
+  "op_latency_ns": {
+    "count": 1025,
+    "max": 2796563.333335,
+    "mean": 1864536.799415,
+    "min": 85326.08,
+    "p50": 2099760.898145,
+    "p95": 2796563.333335,
+    "p99": 2796563.333335
+  },
+  "ops": {
+    "after_end": 0,
+    "alloc_fail_reasons": {},
+    "alloc_failed": 0,
+    "anomalies": {},
+    "executed": {
+      "alloc": 35,
+      "free": 25,
+      "read": 990,
+      "write": 35
+    },
+    "ignored_recorded_ops": {
+      "evict": 0,
+      "migrate": 0,
+      "prefetch": 0
+    },
+    "implicit_alloc_bytes": 0,
+    "total_in_source": 1085
+  },
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "pool": {
+    "bytes_served": 59928215552,
+    "capacity_pages": 32768,
+    "final_used_pages": 32,
+    "max_queue_bytes": 167772192,
+    "peak_used_pages": 288,
+    "service_admitted_ns": 1248504490.666662,
+    "utilization": 0.416168
+  },
+  "replay": {
+    "backpressure": {
+      "mode": "stall",
+      "ops_unissued_due_to_stall": false,
+      "source_slip_ns": 998875915
+    },
+    "complete": true,
+    "executed_alloc_free_records": 60,
+    "executed_alloc_free_sha256": "a045264ebbb7bf16f3387d544220018a80b6186996b617739390d2dae30b9375",
+    "recorded_alloc_free_records": 60,
+    "recorded_alloc_free_sha256": "a045264ebbb7bf16f3387d544220018a80b6186996b617739390d2dae30b9375",
+    "sequence_matches": true
+  },
+  "requests": {
+    "distinct_request_ids": 7
+  },
+  "rmemfab_version": "0.1.0",
+  "run_id": "214d1ab671af-s7-swap_remote",
+  "scenario": "phase2-trace-replay",
+  "scenario_hash": "214d1ab671af6a4e413eefe6e8dd8a78d783ad13695b48c9dd9ee8b64349f4dc",
+  "schema": "rmemfab.summary/0.1",
+  "seed": 7,
+  "series_points": 20,
+  "time": {
+    "steady_window_ns": 3000000000,
+    "virtual_time_ns": 3000000000,
+    "warmup_ns": 0
+  },
+  "traffic": {
+    "evict_bytes": 30299652096,
+    "evictions_dirty_by_construction": true,
+    "install_bytes": 29628563456,
+    "migration_bytes": 59928215552,
+    "prefetch_bytes": 0,
+    "remote_read_bytes": 29628563456,
+    "remote_read_demand_bytes": 0,
+    "remote_read_migration_bytes": 29628563456,
+    "remote_write_bytes": 30299652096,
+    "spill_bytes": 0,
+    "spilled_objects": 0,
+    "transfer_bytes": {
+      "count": 1786,
+      "max": 33554432,
+      "mean": 33554432,
+      "page_size_bytes": 2097152
+    },
+    "transfer_granularity": "object",
+    "wasted_prefetch_bytes": 0
+  },
+  "workload": {
+    "live_objects_at_end": 10,
+    "page_size_bytes": 2097152,
+    "profile": "trace",
+    "trace": {
+      "duration_ns": 1992165909,
+      "label": "synthetic",
+      "page_normalization": {
+        "added_bytes": 0,
+        "examples": [],
+        "records": 0
+      },
+      "records": 1085,
+      "sha256": "59a03667856b6700572b2b1618f118014d9a2c3811f80895b0a6291c692e48d2",
+      "sorted": false,
+      "time_scale": 1
+    },
+    "type": "trace"
+  },
+  "workload_kind": "replay",
+  "workload_label": "synthetic"
+}

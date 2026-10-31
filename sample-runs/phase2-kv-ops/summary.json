@@ -1,0 +1,178 @@
+{
+  "access": {
+    "bypass_reads": 0,
+    "count": 11728,
+    "latency_ns": {
+      "count": 11728,
+      "max": 2796563.333335,
+      "mean": 1964613.142083,
+      "min": 5332.88,
+      "p50": 2099760.898145,
+      "p95": 2796563.333335,
+      "p99": 2796563.333335
+    },
+    "local_hit_ratio": 0.049435,
+    "local_hits": 560,
+    "miss_ratio": 0,
+    "misses": 0,
+    "page_allocations": 400,
+    "ratio_denominator": "page read accesses",
+    "reads": 11328,
+    "remote_hit_ratio": 0.950565,
+    "remote_hits": 10768,
+    "remote_writes": 0,
+    "stall_ns": 1389080323.706825,
+    "total_accesses_incl_warmup": 11728,
+    "warmup": {
+      "note": "equal all/steady counts mean no samples fell in the warmup window; the filter still ran",
+      "samples_all": 11728,
+      "samples_in_warmup": 0,
+      "samples_steady_state": 11728
+    },
+    "writes": 400
+  },
+  "cost": {
+    "capacity": 0.000103,
+    "currency": "USD",
+    "migration": 0.042594,
+    "total": 0.127884,
+    "transfer": 0.085187
+  },
+  "events_processed": 3509,
+  "links": {
+    "node-0-cxl": {
+      "backpressure_stall_ns": 6162002.333333,
+      "busy_ns": 949403010.666712,
+      "bytes_in": 22582132736,
+      "bytes_out": 23152558080,
+      "congested_events": 1363,
+      "max_queue_bytes": 100663328,
+      "node": "node-0",
+      "queue_overflow_events": 143,
+      "service_admitted_ns": 952806058.666675,
+      "time_weighted_queue_bytes": 13591527.462835,
+      "utilization": 0.237351
+    }
+  },
+  "memory": {
+    "node-0": {
+      "bandwidth_utilization": 0.059647,
+      "capacity_pages": 128,
+      "evicted_pages": 11040,
+      "final_used_pages": 128,
+      "installed_pages": 10768,
+      "max_queue_bytes": 201326592,
+      "peak_used_pages": 128
+    }
+  },
+  "op_latency_ns": {
+    "count": 733,
+    "max": 2796563.333335,
+    "mean": 1980387.913161,
+    "min": 85326.08,
+    "p50": 2099760.898145,
+    "p95": 2796563.333335,
+    "p99": 2796563.333335
+  },
+  "ops": {
+    "after_end": null,
+    "alloc_fail_reasons": {},
+    "alloc_failed": 0,
+    "anomalies": {},
+    "executed": {
+      "alloc": 25,
+      "free": 15,
+      "read": 708,
+      "write": 25
+    },
+    "ignored_recorded_ops": {
+      "evict": 0,
+      "migrate": 0,
+      "prefetch": 0
+    },
+    "implicit_alloc_bytes": 0,
+    "total_in_source": 773
+  },
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "pool": {
+    "bytes_served": 45734690816,
+    "capacity_pages": 32768,
+    "final_used_pages": 32,
+    "max_queue_bytes": 167772192,
+    "peak_used_pages": 288,
+    "service_admitted_ns": 952806058.666649,
+    "utilization": 0.474702
+  },
+  "replay": {
+    "backpressure": {
+      "mode": "stall",
+      "ops_unissued_due_to_stall": true,
+      "source_slip_ns": 764693913
+    },
+    "executed_alloc_free_records": 40,
+    "executed_alloc_free_sha256": "ce1d3631126f045fcef90d8380ecba32b6f745a9b7516a75de609a05417d626d"
+  },
+  "requests": {
+    "distinct_request_ids": 5
+  },
+  "rmemfab_version": "0.1.0",
+  "run_id": "102d03e07c98-s21-swap_remote",
+  "scenario": "phase2-kv-ops",
+  "scenario_hash": "102d03e07c98f1b8a66e19ea1f25e69c02b4a15bfef2a0d7655303d53347bd19",
+  "schema": "rmemfab.summary/0.1",
+  "seed": 21,
+  "series_points": 20,
+  "time": {
+    "steady_window_ns": 2000000000,
+    "virtual_time_ns": 2000000000,
+    "warmup_ns": 0
+  },
+  "traffic": {
+    "evict_bytes": 23152558080,
+    "evictions_dirty_by_construction": true,
+    "install_bytes": 22582132736,
+    "migration_bytes": 45734690816,
+    "prefetch_bytes": 0,
+    "remote_read_bytes": 22582132736,
+    "remote_read_demand_bytes": 0,
+    "remote_read_migration_bytes": 22582132736,
+    "remote_write_bytes": 23152558080,
+    "spill_bytes": 0,
+    "spilled_objects": 0,
+    "transfer_bytes": {
+      "count": 1363,
+      "max": 33554432,
+      "mean": 33554432,
+      "page_size_bytes": 2097152
+    },
+    "transfer_granularity": "object",
+    "wasted_prefetch_bytes": 0
+  },
+  "workload": {
+    "generator": {
+      "defaulted_parameters": [
+        {
+          "parameter": "workload.requests.prefill_tokens_per_second",
+          "value": 5000
+        }
+      ],
+      "mode": "open_loop_ops",
+      "page_normalization": {
+        "added_bytes": 0,
+        "records": 0
+      },
+      "profile": "kv_cache_decode"
+    },
+    "live_objects_at_end": 10,
+    "page_size_bytes": 2097152,
+    "profile": "kv_cache_decode",
+    "type": "synthetic"
+  },
+  "workload_kind": "replay",
+  "workload_label": "synthetic"
+}

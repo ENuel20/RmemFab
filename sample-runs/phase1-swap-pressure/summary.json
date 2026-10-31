@@ -1,0 +1,148 @@
+{
+  "access": {
+    "bypass_reads": 0,
+    "count": 610394,
+    "latency_ns": {
+      "count": 610394,
+      "max": 158329116.333334,
+      "mean": 75258.370662,
+      "min": 417.68,
+      "p50": 5362.231684,
+      "p95": 44205.551828,
+      "p99": 44205.551828
+    },
+    "local_hit_ratio": 0.938075,
+    "local_hits": 561059,
+    "miss_ratio": 0,
+    "misses": 0,
+    "page_allocations": 11944,
+    "ratio_denominator": "page read accesses",
+    "reads": 598096,
+    "remote_hit_ratio": 0.061925,
+    "remote_hits": 37037,
+    "remote_writes": 129,
+    "stall_ns": 22778269988.957417,
+    "total_accesses_incl_warmup": 693086,
+    "warmup": {
+      "note": "equal all/steady counts mean no samples fell in the warmup window; the filter still ran",
+      "samples_all": 693086,
+      "samples_in_warmup": 82692,
+      "samples_steady_state": 610394
+    },
+    "writes": 12298
+  },
+  "cost": {
+    "capacity": 0.001327,
+    "currency": "USD",
+    "migration": 0.149299,
+    "total": 0.449727,
+    "transfer": 0.299102
+  },
+  "decode_step_latency_ns": {
+    "count": 2314,
+    "max": 169738239,
+    "mean": 11187329.872601,
+    "min": 1370877.84,
+    "p50": 2719728.563243,
+    "p95": 126641440.684228,
+    "p99": 159208935.818578
+  },
+  "events_processed": 4539,
+  "links": {
+    "node-0-cxl": {
+      "backpressure_stall_ns": 1900914834.000007,
+      "busy_ns": 3185677228.999998,
+      "bytes_in": 77672218624,
+      "bytes_out": 82906710016,
+      "congested_events": 606,
+      "max_queue_bytes": 3449883792,
+      "node": "node-0",
+      "queue_overflow_events": 355,
+      "service_admitted_ns": 3345394346.666671,
+      "time_weighted_queue_bytes": 331312338.366335,
+      "utilization": 0.39821
+    }
+  },
+  "memory": {
+    "node-0": {
+      "bandwidth_utilization": 0.956775,
+      "capacity_pages": 1024,
+      "evicted_pages": 39404,
+      "final_used_pages": 1021,
+      "installed_pages": 37037,
+      "max_queue_bytes": 6500474624,
+      "peak_used_pages": 1024
+    }
+  },
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "pool": {
+    "bytes_served": 160578928640,
+    "capacity_pages": 32768,
+    "final_used_pages": 1043,
+    "max_queue_bytes": 8688202192,
+    "peak_used_pages": 1049,
+    "service_admitted_ns": 3345394346.666661,
+    "utilization": 0.796419
+  },
+  "requests": {
+    "arrived": 63,
+    "completed": 38,
+    "completed_steady": 34,
+    "in_flight_at_end": 8,
+    "latency_ns": {
+      "count": 34,
+      "max": 2555464481,
+      "mean": 593393127.058824,
+      "min": 189889874,
+      "p50": 378378942.019258,
+      "p95": 2095092726.674638,
+      "p99": 2555464481
+    },
+    "queued_at_end": 17,
+    "reject_reasons": {},
+    "rejected": 0,
+    "throughput_per_s": 9.714286,
+    "tokens_per_s": 621.714286
+  },
+  "rmemfab_version": "0.1.0",
+  "run_id": "885dde1bf396-s7-swap_remote",
+  "scenario": "phase1-swap-pressure",
+  "scenario_hash": "885dde1bf39659a1caf416641a22f3b9b22d3480a4d9be205eecb4ab993065da",
+  "schema": "rmemfab.summary/0.1",
+  "seed": 7,
+  "series_points": 40,
+  "time": {
+    "steady_window_ns": 3500000000,
+    "virtual_time_ns": 4000000000,
+    "warmup_ns": 500000000
+  },
+  "traffic": {
+    "evict_bytes": 82636177408,
+    "evictions_dirty_by_construction": true,
+    "install_bytes": 77672218624,
+    "migration_bytes": 160308396032,
+    "prefetch_bytes": 0,
+    "remote_read_bytes": 77672218624,
+    "remote_read_demand_bytes": 0,
+    "remote_read_migration_bytes": 77672218624,
+    "remote_write_bytes": 82906710016,
+    "spill_bytes": 0,
+    "spilled_pages": 0,
+    "transfer_bytes": 2097152,
+    "transfer_granularity": "page",
+    "wasted_prefetch_bytes": 0
+  },
+  "workload": {
+    "kv_bytes_per_request_at_full_context": 545259520,
+    "kv_bytes_per_token": 131072,
+    "kv_formula": "2 * layers * kv_heads * head_dim * dtype_bytes",
+    "page_size_bytes": 2097152,
+    "pages_per_request_max": 260
+  },
+  "workload_label": "synthetic"
+}

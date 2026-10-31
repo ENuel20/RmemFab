@@ -1,0 +1,105 @@
+{
+  "assumed_parameters": [
+    {
+      "path": "nodes[0].local_memory",
+      "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+      "uncertainty_pct": 25
+    },
+    {
+      "path": "nodes[1].remote_memory",
+      "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+      "uncertainty_pct": 30
+    },
+    {
+      "path": "fabric.links[0]",
+      "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+      "uncertainty_pct": 30
+    }
+  ],
+  "backpressure": "stall",
+  "defaulted_parameters": [
+    {
+      "parameter": "workload.requests.prefill_tokens_per_second",
+      "value": 5000.0
+    }
+  ],
+  "event_count": 3509,
+  "events_logged": 0,
+  "generator": {
+    "defaulted_parameters": [
+      {
+        "parameter": "workload.requests.prefill_tokens_per_second",
+        "value": 5000.0
+      }
+    ],
+    "mode": "open_loop_ops",
+    "page_normalization": {
+      "added_bytes": 0,
+      "records": 0
+    },
+    "profile": "kv_cache_decode"
+  },
+  "hit_ratio_denominator": "page_read_accesses",
+  "host": {
+    "numpy": "2.4.4",
+    "platform": "Linux",
+    "python": "3.12.3"
+  },
+  "label_note": null,
+  "node_map": {},
+  "outputs": {
+    "events": null,
+    "scenario": "scenario.json",
+    "series": "series.jsonl",
+    "summary": "summary.json"
+  },
+  "page_normalization": {
+    "added_bytes": 0,
+    "records": 0
+  },
+  "percentile_method": "nearest_rank_log_bucket_upper_edge_1pct",
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "replay_semantics": "open-loop with backpressure: operations execute at their recorded/generated times; simulated latency does not delay later operations, but a link queue above queue_depth_bytes stalls the whole op stream until it has room",
+  "rmemfab_version": "0.1.0",
+  "scenario_assumptions": [
+    "Hardware values are docs/HARDWARE-MODELS.md presets, not measurements.",
+    "Workload is synthetic; it is not a captured serving trace.",
+    "Operation timing uses requests.tokens_per_second (assumed 50 when omitted); replay is open-loop."
+  ],
+  "scenario_hash": "102d03e07c98f1b8a66e19ea1f25e69c02b4a15bfef2a0d7655303d53347bd19",
+  "scenario_name": "phase2-kv-ops",
+  "schema_version": "0.1",
+  "seed": 21,
+  "shared_pool_model": "shared_byte_server",
+  "status": "completed",
+  "stream_seeds": {
+    "fabric": [
+      5376254993510293105,
+      17997005024152308627
+    ],
+    "faults": [
+      17799379081061227467,
+      3235053530899552201
+    ],
+    "policy": [
+      9365346402464578620,
+      2471578157229388940
+    ],
+    "workload": [
+      978689085038888030,
+      11504433521796563117
+    ]
+  },
+  "trace_hashes": [],
+  "trace_header": null,
+  "transfer_granularity": "object",
+  "virtual_time_ns": 2000000000,
+  "warmup_ns": 0,
+  "warnings": [],
+  "workload_label": "synthetic"
+}

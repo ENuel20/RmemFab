@@ -1,0 +1,81 @@
+{
+  "assumed_parameters": [
+    {
+      "path": "nodes[0].local_memory",
+      "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+      "uncertainty_pct": 25
+    },
+    {
+      "path": "nodes[1].remote_memory",
+      "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+      "uncertainty_pct": 30
+    },
+    {
+      "path": "fabric.links[0]",
+      "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+      "uncertainty_pct": 30
+    }
+  ],
+  "event_count": 4539,
+  "events_logged": 0,
+  "hit_ratio_denominator": "page_read_accesses",
+  "host": {
+    "numpy": "2.4.4",
+    "platform": "Linux",
+    "python": "3.12.3"
+  },
+  "limitations": [
+    "Fabric: each compute->pool link is a FIFO byte server and the pool is a shared byte server (aggregate pool service never exceeds pool bandwidth).",
+    "Requests larger than local DRAM spill their overflow pages to the pool (swap_remote only); a spilled newest page makes each KV append a fabric write.",
+    "Closed-loop: the issuing request blocks until its transfer completes, so queue_depth_bytes backpressure is inherent; excess is still reported as queue_overflow_events / backpressure_stall_ns.",
+    "Percentiles come from a log-bucket histogram (upper bucket edge, <=1% relative error, never under-reports)."
+  ],
+  "outputs": {
+    "events": null,
+    "scenario": "scenario.json",
+    "series": "series.jsonl",
+    "summary": "summary.json"
+  },
+  "percentile_method": "nearest_rank_log_bucket_upper_edge_1pct",
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "rmemfab_version": "0.1.0",
+  "scenario_assumptions": [
+    "Local DRAM is deliberately tiny (2 GiB) to force capacity pressure; this is a stress scenario, not a model of a real node.",
+    "CXL link and pool values are the docs/HARDWARE-MODELS.md presets, not measurements.",
+    "Synthetic KV-cache decode with 32-layer GQA geometry; not a captured trace."
+  ],
+  "scenario_hash": "885dde1bf39659a1caf416641a22f3b9b22d3480a4d9be205eecb4ab993065da",
+  "scenario_name": "phase1-swap-pressure",
+  "schema_version": "0.1",
+  "seed": 7,
+  "shared_pool_model": "shared_byte_server",
+  "status": "completed",
+  "stream_seeds": {
+    "fabric": [
+      6823953754371609207,
+      15549341456297449710
+    ],
+    "faults": [
+      17559002276220262541,
+      3147876876828449332
+    ],
+    "policy": [
+      4042502035264064771,
+      18081263350903326076
+    ],
+    "workload": [
+      3386250816931739734,
+      17579791024057999317
+    ]
+  },
+  "trace_hashes": [],
+  "virtual_time_ns": 4000000000,
+  "warmup_ns": 500000000,
+  "warnings": [],
+  "workload_label": "synthetic"
+}
