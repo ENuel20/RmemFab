@@ -22,6 +22,8 @@ from ..core.engine import Engine
 from ..sweep.compare import ComparisonRefused, compare_runs
 from ..trace.replay import ReplayDivergence, ReplayEngine
 from ..trace.validate import TraceError, load_trace
+from .draft import CHAT_SYSTEM, build_messages, telemetry_brief
+from .providers import (BasetenClient, ProviderError, ProviderNotConfigured)
 from .store import RunStore, TraceStore, split_error, trace_profile
 
 
@@ -66,6 +68,13 @@ class CompareRequest(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[dict] = Field(default_factory=list)
     context: dict = Field(default_factory=dict)
+    stream: bool = False
+
+
+class DraftRequest(BaseModel):
+    prompt: str
+    parent_version: str | None = None
+    max_tokens: int = 8000
 
 
 def _resolve_pointer(doc, pointer: str):
@@ -180,6 +189,10 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
         unchanged = sorted(k for k in new if k not in touched)
         return {"version": version, "parent_version": req.parent_version,
                 "changes": changes, "unchanged": unchanged}
+
+    @app.get("/scenarios/version/{version}")
+    def scenarios_version_get(version: str):
+        return _load_version(version)
 
     @app.post("/runs", status_code=202)
     def runs_submit(req: RunRequest):
@@ -314,10 +327,99 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
         traces.discard(trace_id)
         return {"trace_id": trace_id, "deleted": True}
 
+    @app.post("/scenarios/draft")
+    def scenarios_draft(req: DraftRequest):
+        parent, parent_version = None, None
+        if req.parent_version is not None:
+            parent_version = req.parent_version
+            parent = _load_version(req.parent_version)["scenario"]
+        try:
+            client = BasetenClient()
+        except ProviderNotConfigured as exc:
+            raise HTTPException(503, str(exc))
+        try:
+            out = client.chat(build_messages(req.prompt, parent),
+                              max_tokens=req.max_tokens, temperature=0,
+                              json_mode=True)
+        except ProviderError as exc:
+            raise HTTPException(502, str(exc))
+        try:
+            scenario = json.loads(out["content"])
+        except json.JSONDecodeError:
+            raise HTTPException(
+                422, {"error": "model output was not JSON",
+                      "raw_excerpt": out["content"][:1000]})
+        if not isinstance(scenario, dict):
+            raise HTTPException(
+                422, {"error": "model output was not an object",
+                      "raw_excerpt": out["content"][:1000]})
+        errors, warnings, assumed = validate(scenario, for_run=True)
+        if errors:
+            raise HTTPException(
+                422, {"error": "draft failed validation",
+                      "scenario": scenario,
+                      "errors": [split_error(e) for e in errors],
+                      "warnings": warnings})
+        version = scenario_hash(scenario)[:16]
+        (versions_dir / f"{version}.json").write_text(
+            json.dumps({"version": version, "parent_version": parent_version,
+                        "scenario": json.loads(canonical_json(scenario)),
+                        "draft_prompt": req.prompt,
+                        "draft_model": out["model"]},
+                       indent=2, sort_keys=True), encoding="utf-8")
+        return {"scenario": scenario, "version": version,
+                "parent_version": parent_version,
+                "validation": {"warnings": warnings, "assumed": assumed},
+                "model": out["model"], "usage": out["usage"]}
+
     @app.post("/assistant/chat")
-    def assistant_chat(_req: ChatRequest):
-        raise HTTPException(
-            501, "assistant is not wired yet (M4 thin slice); the simulation "
-                 "API above is fully functional without it")
+    def assistant_chat(req: ChatRequest):
+        run_id = (req.context or {}).get("run_id")
+        brief = None
+        if run_id is not None:
+            detail = runs.detail(run_id)
+            if detail is None:
+                raise HTTPException(404, f"unknown run {run_id!r}")
+            brief = telemetry_brief(detail)
+        try:
+            client = BasetenClient()
+        except ProviderNotConfigured as exc:
+            raise HTTPException(503, str(exc))
+        system = CHAT_SYSTEM + (f"\n\nRun telemetry:\n{brief}"
+                                if brief is not None else
+                                "\n\nNo run telemetry provided.")
+        messages = [{"role": "system", "content": system},
+                    *req.messages]
+        if not req.stream:
+            try:
+                chunks = list(client.chat_stream(messages))
+            except ProviderError as exc:
+                raise HTTPException(502, str(exc))
+            def _delta(c):
+                ch = (c.get("choices") or [{}])[0]
+                return (ch.get("delta") or {}).get("content", "") or ""
+            text = "".join(_delta(c) for c in chunks
+                            if isinstance(c, dict))
+            return {"content": text, "model": client.model,
+                    "run_id": run_id}
+        try:
+            stream = client.chat_stream(messages)
+            first = next(stream)
+        except StopIteration:
+            first = None
+        except ProviderError as exc:
+            raise HTTPException(502, str(exc))
+
+        def generate():
+            if first is not None:
+                yield f"data: {json.dumps(first)}\n\n"
+            try:
+                for chunk in stream:
+                    yield f"data: {json.dumps(chunk)}\n\n"
+            except ProviderError as exc:
+                yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(generate(), media_type="text/event-stream")
 
     return app

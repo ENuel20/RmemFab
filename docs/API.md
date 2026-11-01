@@ -61,6 +61,8 @@ with JSON-pointer paths (`/fabric/links/0/latency_ns`). The server applies
 the patch, validates the result (422 + errors if invalid), stores the version
 (`version` = scenario-hash prefix), and echoes `changes: [{path, from, to}]`
 plus untouched top-level keys in `unchanged[]`.
+`GET /scenarios/version/{v}` fetches a stored `{version, parent_version,
+scenario}` for editing or submitting (what-if loop: version → fetch → run).
 
 ### `POST /runs` → `202 {run_id, status}`
 
@@ -159,10 +161,25 @@ layout.
   normalization{…}}`. `provenance` is `measured|derived|synthetic|calibrated`
   when the trace declares it, else null — never guess it client-side.
 
-### `POST /assistant/chat` → `501`
+### `POST /scenarios/draft` → `{scenario, version, validation, model, usage}`
 
-Not wired yet (M4 thin slice). The frontend MUST NOT call it in production
-paths; every simulation feature above works without it.
+Natural-language to scenario (Baseten Muse backend). Body:
+`{prompt, parent_version?, max_tokens?}`. The model proposes; the server
+disposes: drafts are validated with the real validator before storage, and
+invalid drafts return 422 with `{error, scenario?, errors[]}` — never
+silently repaired, never runnable. Valid drafts are stored as scenario
+versions (usable as `parent_version` here or in `/scenarios/version`).
+`503` when the provider key is not configured, `502` on provider failure.
+
+### `POST /assistant/chat` → answer or SSE stream
+
+Body: `{messages[], context{run_id?}, stream?}`. With `context.run_id` the
+server injects a compact telemetry brief and instructs the model to answer
+only from it (exact numbers, no invention); without it the model is told no
+telemetry was provided. `stream: false` (default) returns
+`{content, model, run_id}`; `stream: true` returns OpenAI-style SSE chunks
+plus `data: [DONE]`. Unknown run → 404; missing key → 503; provider
+failure → 502 (mid-stream failures arrive as a `data: {"error": …}` chunk).
 
 ## Errors
 
@@ -172,7 +189,8 @@ paths; every simulation feature above works without it.
   (Pydantic request-shape failures also 422 with FastAPI's default body —
   distinguish by shape.)
 - `413` — trace upload over the size cap.
-- `501` — assistant stub.
+- `502` — provider call failed (message carries the reason, never the key).
+- `503` — provider not configured (`BASETEN_API_KEY` missing).
 
 ## Minimal dashboard flow (curl)
 

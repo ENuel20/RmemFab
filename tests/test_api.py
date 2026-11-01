@@ -118,6 +118,21 @@ class ApiContract(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["parent_version"], v1["version"])
 
+    def test_version_fetch_round_trip(self):
+        r = self.c.post("/scenarios/version", json={
+            "scenario": tiny_synth(),
+            "patch": [{"op": "replace",
+                       "path": "/fabric/links/0/latency_ns", "value": 240}]})
+        v = r.json()["version"]
+        r = self.c.get(f"/scenarios/version/{v}")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["version"], v)
+        self.assertEqual(body["scenario"]["fabric"]["links"][0]["latency_ns"],
+                         240)
+        self.assertEqual(self.c.get("/scenarios/version/nope").status_code,
+                         404)
+
     def test_version_rejects_bad_patch_and_bad_result(self):
         r = self.c.post("/scenarios/version", json={
             "scenario": tiny_synth(),
@@ -266,11 +281,6 @@ class ApiContract(unittest.TestCase):
         r = self.c.post("/traces", files={"file": ("bad.jsonl", blob)})
         self.assertEqual(r.status_code, 422)
         self.assertIn("errors", r.json()["detail"])
-
-    def test_assistant_is_honest_stub(self):
-        r = self.c.post("/assistant/chat", json={"messages": []})
-        self.assertEqual(r.status_code, 501)
-
 
 if __name__ == "__main__":
     unittest.main()
