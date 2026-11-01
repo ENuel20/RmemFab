@@ -186,6 +186,7 @@ RmemFab/
 │   ├── HARDWARE-MODELS.md    # latency/bandwidth equations and presets
 │   ├── ROADMAP.md            # milestones and acceptance criteria
 │   ├── GLOSSARY.md           # CXL, RDMA, KV cache, MoE, and related terms
+│   ├── ACCEPTANCE.md         # executable checks for correctness, fairness, explainability
 │   └── FAQ.md                # scope, non-goals, validation
 ├── SPECS/
 │   ├── README.md             # specification versioning
@@ -194,8 +195,19 @@ RmemFab/
 │   └── trace.schema.json     # memory access trace record schema
 └── examples/
     ├── llama-70b-cxl.json
-    └── moe-remote-tiering.json
+    ├── moe-remote-tiering.json
+    ├── policy-prefetch-failure.json
+    ├── phase1-overflow.json   # deliberately undersized local tier; proves the remote path
+    └── traces/
+        ├── 20261029T202303Z-opt-125m/
+            ├── kv_trace.jsonl  # measured vLLM block-table trace (A4.5)
+            └── manifest.json   # capture metadata and SHA-256
+        └── 20261030T000445Z-muse-glimmer-derived/
+            ├── kv_trace.jsonl  # geometry-derived workload; not a block-table trace
+            └── manifest.json   # measured run metadata and file hashes
 ```
+
+The Glimmer concurrency summary and captured per-setting manifests are in [`examples/experiments/muse-glimmer-stress/`](examples/experiments/muse-glimmer-stress/). The Glimmer page accesses are derived from request token counts and model geometry; see the [capture report](docs/MUSE_GLIMMER_CAPTURE_REPORT.md) for evidence and limitations.
 
 The core engine, API, and dashboard directories will be added as implementation lands. Specs are written first so the engine and UI can be developed independently.
 
@@ -233,6 +245,10 @@ Commands are targets for the first implementation milestone; see [docs/ROADMAP.m
 - **Phase 4 — Dashboard:** live telemetry, policy comparison, memory heatmaps, run history.
 - **Phase 5 — Resilience and co-pilot:** fault injection, degraded-mode analysis, natural-language scenario authoring, grounded policy suggestions.
 - **Phase 6 — Validation:** compare simulated predictions with measured CXL/RDMA behavior and publish error bounds.
+
+## Acceptance criteria
+
+Requirements are not considered met until a reproducible command demonstrates them. [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) defines the checks for correctness, provenance, fair comparison, workload realism, explainability, reproducibility, the dashboard, and the policy-failure result.
 
 ## Contributing
 

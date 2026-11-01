@@ -21,6 +21,23 @@ Scenarios must validate before any simulation starts. The same schema is used by
 
 Trace records are validated line by line. A malformed line stops import unless the importer is explicitly run in best-effort mode, in which case rejected lines are counted and reported.
 
+## Provenance
+
+Hardware and model parameters may carry a `provenance` block:
+
+```json
+{
+  "kind": "measured | sourced | assumed",
+  "source": "citation, datasheet, dataset, or benchmark",
+  "method": "how the value was obtained or fitted",
+  "date": "2026-10-28",
+  "uncertainty_pct": 25,
+  "notes": "optional"
+}
+```
+
+Scenarios may also list top-level `assumptions` strings. Both fields are optional and additive, so they do not change the schema version. A run intended for absolute claims should be validated with provenance required; missing provenance is a warning, not a silent pass. The dashboard must show assumed values next to the verdict.
+
 ## Compatibility policy
 
 - **Patch releases:** no schema changes.

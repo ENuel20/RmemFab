@@ -1,0 +1,56 @@
+{
+  "concurrency": 16,
+  "counts": {
+    "allocator_events": 0,
+    "kv_events": 84656,
+    "requests": 16
+  },
+  "created_at": "2026-10-30T00:21:20.849522+00:00",
+  "cuda_memory": {
+    "gpu_free_bytes_after_generation": 7374241792,
+    "gpu_free_bytes_before_generation": 9255387136,
+    "gpu_used_bytes_generation_delta_high_water": 1881145344,
+    "gpu_used_bytes_high_water": 77743915008,
+    "sample_count": 211,
+    "sample_interval_ms": 50,
+    "scope": "whole GPU; includes model weights, vLLM KV pool, and any other GPU processes",
+    "source": "torch.cuda.mem_get_info sampled during generation",
+    "total_bytes": 85118156800
+  },
+  "files": {
+    "allocator_trace.jsonl": "6c44929fb191b287e0049a5988c75add791c605fc6c6b375515f079bad4de927",
+    "kv_trace.jsonl": "2217338860960e4232bb087d4a155d36d4602c213dab8a4b55f8e661ec0b3d1a",
+    "requests.jsonl": "4436f9aa6562afbf74b71c31f0f6486122ff92bfd1960fda19392358c2280a4a",
+    "snapshot.pickle": "4f70d563e1ec66fc2e89ccf8b15af1e6a502854e66c185aa31eeb1e07b3a2c5f"
+  },
+  "generated_tokens": 32,
+  "generation_wall_seconds": 10.906726837158203,
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "kv_geometry": {
+    "attention_heads": 32,
+    "bytes_per_token_all_layers": 53248,
+    "dtype_bytes": 2,
+    "full_attention_layers": 13,
+    "head_dim": 128,
+    "kv_heads": 2,
+    "layers": 52,
+    "sliding_attention_layers": 39,
+    "sliding_window_tokens": 2048
+  },
+  "model": "meta-models/Muse-Glimmer-30B",
+  "notes": "Measured Muse Glimmer requests on a Modal A100-80GB. KV accesses are derived from real token counts and the model's published layer geometry; they are not a vLLM block-table trace.",
+  "page_normalization": {
+    "note": "The derived trace already uses RmemFab page granularity."
+  },
+  "page_size_bytes": 2097152,
+  "prompt_tokens": 8192,
+  "run_id": "20261030T001845Z-muse-glimmer",
+  "runtime": {
+    "cuda": "13.0",
+    "torch": "2.13.0+cu130",
+    "vllm": "0.26.1rc1.dev608+g99a10304d"
+  },
+  "seed": 7,
+  "source": "muse-glimmer-derived-kv",
+  "trace_version": "0.1"
+}

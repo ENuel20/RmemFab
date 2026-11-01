@@ -3,6 +3,12 @@
   "version": "0.1",
   "name": "moe-remote-tiering",
   "description": "Eight compute nodes running a Mixtral-style MoE workload over RDMA remote memory, with a node failure and a degraded link to exercise fault behavior.",
+  "assumptions": [
+    "RDMA values are starting presets from docs/HARDWARE-MODELS.md, not measurements of a specific fabric.",
+    "Expert popularity is synthetic and static; this revision does not model a hot set that shifts over time.",
+    "Failure timing is explicit and scenario-scheduled. Stochastic failure processes are supported by the schema but not exercised here.",
+    "Results are relative comparisons between policies until the scenario is calibrated against measured RDMA latency distributions."
+  ],
   "seed": 7,
   "duration_ns": 120000000000,
   "warmup_ns": 10000000000,
@@ -14,12 +20,25 @@
       "local_memory": {
         "capacity_bytes": 274877906944,
         "latency_ns": 95,
-        "bandwidth_bytes_per_ns": 300
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "A100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA A100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -28,12 +47,25 @@
       "local_memory": {
         "capacity_bytes": 274877906944,
         "latency_ns": 95,
-        "bandwidth_bytes_per_ns": 300
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "A100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA A100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -42,12 +74,25 @@
       "local_memory": {
         "capacity_bytes": 274877906944,
         "latency_ns": 95,
-        "bandwidth_bytes_per_ns": 300
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "A100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA A100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -56,12 +101,25 @@
       "local_memory": {
         "capacity_bytes": 274877906944,
         "latency_ns": 95,
-        "bandwidth_bytes_per_ns": 300
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "A100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA A100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -70,12 +128,25 @@
       "local_memory": {
         "capacity_bytes": 274877906944,
         "latency_ns": 95,
-        "bandwidth_bytes_per_ns": 300
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "A100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA A100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -84,12 +155,25 @@
       "local_memory": {
         "capacity_bytes": 274877906944,
         "latency_ns": 95,
-        "bandwidth_bytes_per_ns": 300
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "A100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA A100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -98,12 +182,25 @@
       "local_memory": {
         "capacity_bytes": 274877906944,
         "latency_ns": 95,
-        "bandwidth_bytes_per_ns": 300
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "A100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA A100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -112,12 +209,25 @@
       "local_memory": {
         "capacity_bytes": 274877906944,
         "latency_ns": 95,
-        "bandwidth_bytes_per_ns": 300
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "A100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA A100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -126,7 +236,14 @@
       "remote_memory": {
         "capacity_bytes": 8796093022208,
         "latency_ns": 2500,
-        "bandwidth_bytes_per_ns": 25
+        "bandwidth_bytes_per_ns": 25,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA preset",
+          "method": "RoCE/InfiniBand class one-way latency and per-port bandwidth; congestion behavior is not calibrated.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
       }
     }
   ],
@@ -140,7 +257,14 @@
         "bandwidth_bytes_per_ns": 25,
         "in_flight_bytes": 4194304,
         "queue_depth_bytes": 33554432,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth and loss settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
       },
       {
         "id": "node-1-rdma",
@@ -150,7 +274,14 @@
         "bandwidth_bytes_per_ns": 25,
         "in_flight_bytes": 4194304,
         "queue_depth_bytes": 33554432,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth and loss settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
       },
       {
         "id": "node-2-rdma",
@@ -160,7 +291,14 @@
         "bandwidth_bytes_per_ns": 25,
         "in_flight_bytes": 4194304,
         "queue_depth_bytes": 33554432,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth and loss settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
       },
       {
         "id": "node-3-rdma",
@@ -170,7 +308,14 @@
         "bandwidth_bytes_per_ns": 25,
         "in_flight_bytes": 4194304,
         "queue_depth_bytes": 33554432,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth and loss settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
       },
       {
         "id": "node-4-rdma",
@@ -180,7 +325,14 @@
         "bandwidth_bytes_per_ns": 25,
         "in_flight_bytes": 4194304,
         "queue_depth_bytes": 33554432,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth and loss settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
       },
       {
         "id": "node-5-rdma",
@@ -190,7 +342,14 @@
         "bandwidth_bytes_per_ns": 25,
         "in_flight_bytes": 4194304,
         "queue_depth_bytes": 33554432,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth and loss settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
       },
       {
         "id": "node-6-rdma",
@@ -200,7 +359,14 @@
         "bandwidth_bytes_per_ns": 25,
         "in_flight_bytes": 4194304,
         "queue_depth_bytes": 33554432,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth and loss settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
       },
       {
         "id": "node-7-rdma",
@@ -210,7 +376,14 @@
         "bandwidth_bytes_per_ns": 25,
         "in_flight_bytes": 4194304,
         "queue_depth_bytes": 33554432,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth and loss settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
       }
     ]
   },

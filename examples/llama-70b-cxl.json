@@ -3,6 +3,12 @@
   "version": "0.1",
   "name": "llama-70b-cxl",
   "description": "Four compute nodes serving Llama-3-70B with a shared CXL-attached memory pool. Compares a hot/cold placement policy against local-only and swap baselines.",
+  "assumptions": [
+    "Local DRAM and CXL values are starting presets from docs/HARDWARE-MODELS.md, not measurements of a specific machine.",
+    "Each compute-to-pool link is modeled as an independent byte server; shared pool service contention is not yet modeled in this revision.",
+    "The workload is synthetic KV-cache decode derived from Llama-3-70B geometry. It is not a captured serving trace.",
+    "Results are relative comparisons between policies until the scenario is calibrated against measured latency distributions."
+  ],
   "seed": 42,
   "duration_ns": 60000000000,
   "warmup_ns": 5000000000,
@@ -14,12 +20,25 @@
       "local_memory": {
         "capacity_bytes": 549755813888,
         "latency_ns": 90,
-        "bandwidth_bytes_per_ns": 400
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "H100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -28,12 +47,25 @@
       "local_memory": {
         "capacity_bytes": 549755813888,
         "latency_ns": 90,
-        "bandwidth_bytes_per_ns": 400
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "H100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -42,12 +74,25 @@
       "local_memory": {
         "capacity_bytes": 549755813888,
         "latency_ns": 90,
-        "bandwidth_bytes_per_ns": 400
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "H100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -56,12 +101,25 @@
       "local_memory": {
         "capacity_bytes": 549755813888,
         "latency_ns": 90,
-        "bandwidth_bytes_per_ns": 400
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset",
+          "method": "Socket-class latency and bandwidth chosen for exploration; not measured on the target node.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
       },
       "compute": {
         "accelerator": "H100-80GB",
         "accelerators": 8,
-        "accelerator_memory_bytes": 85899345920
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-28"
+        }
       }
     },
     {
@@ -70,7 +128,14 @@
       "remote_memory": {
         "capacity_bytes": 4398046511104,
         "latency_ns": 180,
-        "bandwidth_bytes_per_ns": 48
+        "bandwidth_bytes_per_ns": 48,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+          "method": "CXL.mem class latency and per-port bandwidth; not measured and not fitted to a switch topology.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
       }
     }
   ],
@@ -84,7 +149,14 @@
         "bandwidth_bytes_per_ns": 48,
         "in_flight_bytes": 16777216,
         "queue_depth_bytes": 67108864,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+          "method": "One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
       },
       {
         "id": "node-1-cxl",
@@ -94,7 +166,14 @@
         "bandwidth_bytes_per_ns": 48,
         "in_flight_bytes": 16777216,
         "queue_depth_bytes": 67108864,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+          "method": "One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
       },
       {
         "id": "node-2-cxl",
@@ -104,7 +183,14 @@
         "bandwidth_bytes_per_ns": 48,
         "in_flight_bytes": 16777216,
         "queue_depth_bytes": 67108864,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+          "method": "One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
       },
       {
         "id": "node-3-cxl",
@@ -114,7 +200,14 @@
         "bandwidth_bytes_per_ns": 48,
         "in_flight_bytes": 16777216,
         "queue_depth_bytes": 67108864,
-        "bidirectional": true
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+          "method": "One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 30
+        }
       }
     ]
   },

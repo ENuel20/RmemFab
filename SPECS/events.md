@@ -37,6 +37,7 @@ Unknown events must be preserved by consumers but may be ignored.
 | `prefill_end` | `request_id`, `duration_ns` |
 | `decode_step` | `request_id`, `token_index` |
 | `request_complete` | `request_id`, `tokens_generated`, `latency_ns` |
+| `request_rejected` | `request_id`, `reason` |
 
 ## Memory
 
@@ -55,8 +56,8 @@ Unknown events must be preserved by consumers but may be ignored.
 
 | Event | Payload |
 | :--- | :--- |
-| `transfer_begin` | `link`, `bytes`, `from_node`, `to_node`, `kind` |
-| `transfer_complete` | `link`, `bytes`, `duration_ns`, `queue_delay_ns` |
+| `transfer_begin` | `link`, `path`, `bytes`, `from_node`, `to_node`, `kind` |
+| `transfer_complete` | `link`, `path`, `bytes`, `duration_ns`, `queue_delay_ns` |
 | `link_congested` | `link`, `queue_bytes`, `utilization` |
 | `link_degraded` | `link`, `bandwidth_factor`, `latency_factor` |
 | `link_restored` | `link` |
@@ -95,6 +96,21 @@ Unknown events must be preserved by consumers but may be ignored.
 | `sampling_tick` | `interval_ns` |
 | `run_end` | `events_processed`, `virtual_time_ns`, `status` |
 | `metric_snapshot` | `window_ns`, metric-specific fields |
+
+## Aggregate forms
+
+Per-page rows would dominate telemetry volume at production access counts, so
+Phase 1 lifecycle events use aggregate rows: `page_allocate`, `page_free`,
+`page_evict`, `page_miss`, and `page_migrate_begin`/`page_migrate_end` carry
+`pages` (exact count) and `bytes` plus a `page_id_prefix` (and `index_start`
+where the range is contiguous) instead of a single `page_id`. Counts are exact
+and deterministic, and the prefix/range reconstructs the page set. Consumers
+MUST NOT invent page identities beyond the documented prefix/range.
+Per-page drill-down arrives with the trace-replay work.
+
+## N-tier fields
+
+`path` is the static route's link-id list in traversal order (`link` repeats its first element for single-hop compatibility). Tier-valued fields (`tier`, `from_tier`, `to_tier`, `requested_tier`, `found_tier`, `remote_tier`) name any tier: a compute node id or a pool id.
 
 ## Ordering guarantees
 

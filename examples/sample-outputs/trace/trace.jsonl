@@ -1,0 +1,6 @@
+{"type": "header", "trace_version": "0.1", "source": "sample"}
+{"ts_ns": 100, "op": "alloc", "page_id": "a", "request_id": "r0", "bytes": 4096}
+{"ts_ns": 200, "op": "alloc", "page_id": "b", "request_id": "r0", "bytes": 4096}
+{"ts_ns": 300, "op": "read", "page_id": "a", "request_id": "r0", "bytes": 4096}
+{"ts_ns": 400, "op": "write", "page_id": "b", "request_id": "r0", "bytes": 4096}
+{"ts_ns": 500, "op": "free", "page_id": "a", "request_id": "r0", "bytes": 4096}

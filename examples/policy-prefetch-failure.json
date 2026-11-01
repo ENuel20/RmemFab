@@ -1,0 +1,136 @@
+{
+  "$schema": "../SPECS/config.schema.json",
+  "version": "0.1",
+  "name": "policy-prefetch-failure",
+  "description": "A8 harness: does aggressive prefetching help the mean and hurt the tail? Run once as filed (predictive_prefetch) and once with --policy hot_cold using the same seed; the hypothesis is that growth-anticipation prefetching raises the local-hit ratio but its extra install traffic queues behind demand on the tight link and raises p99. This is a hypothesis to verify, not a result. It is not a measured-hardware experiment.",
+  "assumptions": [
+    "Local capacity is intentionally 2 GiB so the working set churns and every policy decision is exercised; a real node has far more DRAM.",
+    "Prefetch parameters are deliberately aggressive (degree 4, high in-flight cap) to expose the contention failure mode if it exists.",
+    "Prefetches share the demand fabric with no priority lane, so prefetch traffic visibly competes with demand fetches.",
+    "The workload is synthetic KV-cache decode, not a captured serving trace; arrival rate is raised versus phase1-overflow to keep the link loaded.",
+    "Values are starting presets from docs/HARDWARE-MODELS.md. Replace them with measured values before making absolute claims."
+  ],
+  "seed": 42,
+  "duration_ns": 10000000000,
+  "warmup_ns": 1000000000,
+  "page_size_bytes": 2097152,
+  "nodes": [
+    {
+      "id": "node-0",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 2147483648,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 2 GiB so the decode working set cannot fit and policies must churn.",
+          "date": "2026-10-29",
+          "notes": "Test fixture, not a deployment configuration."
+        }
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-29"
+        }
+      }
+    },
+    {
+      "id": "remote-pool",
+      "role": "memory",
+      "remote_memory": {
+        "capacity_bytes": 1099511627776,
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+          "method": "CXL.mem class latency and per-port bandwidth; not measured and not fitted to a switch topology.",
+          "date": "2026-10-29",
+          "uncertainty_pct": 30
+        }
+      }
+    }
+  ],
+  "fabric": {
+    "links": [
+      {
+        "id": "node-0-cxl",
+        "from": "node-0",
+        "to": "remote-pool",
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "in_flight_bytes": 16777216,
+        "queue_depth_bytes": 67108864,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+          "method": "One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-29",
+          "uncertainty_pct": 30
+        }
+      }
+    ]
+  },
+  "workload": {
+    "type": "synthetic",
+    "profile": "kv_cache_decode",
+    "model": {
+      "name": "llama-3-70b",
+      "family": "llama",
+      "layers": 80,
+      "attention_heads": 64,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "dtype_bytes": 2
+    },
+    "requests": {
+      "arrival_rate_per_second": 4,
+      "concurrency": 4,
+      "prompt_tokens": 8192,
+      "generated_tokens": 128,
+      "phase_mix": {
+        "prefill": 0.2,
+        "decode": 0.8
+      }
+    }
+  },
+  "policy": {
+    "name": "predictive_prefetch",
+    "params": {
+      "degree": 4,
+      "stride": 1,
+      "max_in_flight": 256
+    }
+  },
+  "faults": {
+    "node_failures": [],
+    "link_degradations": [],
+    "packet_loss": {
+      "enabled": false,
+      "ppm": 0
+    }
+  },
+  "metrics": {
+    "percentiles": [
+      50,
+      95,
+      99
+    ],
+    "sample_interval_ns": 100000000,
+    "warmup_ns": 1000000000
+  },
+  "output": {
+    "format": "jsonl",
+    "path": "runs/policy-prefetch-failure",
+    "include_event_log": true
+  }
+}

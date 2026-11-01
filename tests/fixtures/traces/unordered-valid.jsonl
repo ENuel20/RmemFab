@@ -1,0 +1,7 @@
+{"type": "header", "trace_version": "0.1", "source": "test"}
+{"ts_ns": 100, "op": "alloc", "page_id": "p1", "bytes": 1024}
+{"ts_ns": 50, "op": "alloc", "page_id": "p2", "bytes": 1024}
+{"ts_ns": 60, "op": "read", "page_id": "p2", "bytes": 1024}
+{"ts_ns": 110, "op": "read", "page_id": "p1", "bytes": 1024}
+{"ts_ns": 120, "op": "free", "page_id": "p1", "bytes": 1024}
+{"ts_ns": 70, "op": "free", "page_id": "p2", "bytes": 1024}
