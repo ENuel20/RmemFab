@@ -21,10 +21,17 @@ swap_remote. Run IDs `5810d9205417-s7-swap_remote` (synthetic) and
 
 - `summary.json` + `manifest.json` → `RunDetail` shape, PRODUCT-SPEC §4.
 - `series.jsonl` → one `SeriesPoint` per sampling tick:
-  `{t_ns, accesses, evictions, completed, local_used_pages{node→n},
-  pool_used_pages, pools_used_pages{pool→n}, link_bytes{link→n}}`.
-  Counters are per-window deltas; occupancy/bytes are point-in-time.
+  `{t_ns, accesses, evictions, completed, degraded,
+  local_used_pages{node→n}, pool_used_pages, pools_used_pages{pool→n},
+  link_bytes{link→n}}`.
+  Counters are per-window deltas; occupancy/bytes are point-in-time;
+  `degraded` is the count of active fault windows at the tick (0 when
+  the scenario configures no faults).
   There is no per-window latency — do not render latency from series.
+- `summary.json` carries a `degraded` section:
+  `{windows[{type, target, start_ns, end_ns, …}], stalled_requests,
+  loss_events, retransmissions, retransmit_bytes, retransmit_delay_ns,
+  stalled_transfers, stalled_bytes}` — all zeros/empty without faults.
 - `events.jsonl` → one `SimEvent` per line:
   `{event, time_ns, seq, run_id, node?, request_id?, data}`,
   ordered by `(time_ns, seq)`, per `SPECS/events.md`.

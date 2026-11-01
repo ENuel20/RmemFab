@@ -134,6 +134,144 @@ class AssistantContract(unittest.TestCase):
             r = self.c.post("/assistant/chat", json={"messages": []})
         self.assertEqual(r.status_code, 502)
 
+    def _seed_version(self, policy="swap_remote"):
+        r = self.c.post("/scenarios/version",
+                        json={"scenario": tiny_synth(policy)})
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()["version"]
+
+    def test_apply_patch_from_version_runs(self):
+        v1 = self._seed_version()
+        r = self.c.post("/assistant/apply", json={
+            "parent_version": v1, "note": "bump seed",
+            "patch": [{"op": "replace", "path": "/seed", "value": 11}]})
+        self.assertEqual(r.status_code, 202, r.text)
+        body = r.json()
+        self.assertNotEqual(body["version"], v1)
+        self.assertEqual(body["status"], "completed")
+        self.assertEqual(len(body["changes"]), 1)
+        # Stored version is the patched scenario.
+        r = self.c.get(f"/scenarios/version/{body['version']}")
+        self.assertEqual(r.json()["scenario"]["seed"], 11)
+        self.assertEqual(r.json()["parent_version"], v1)
+
+    def test_apply_rejects_invalid_patch(self):
+        v1 = self._seed_version()
+        r = self.c.post("/assistant/apply", json={
+            "parent_version": v1,
+            "patch": [{"op": "remove", "path": "/nodes"}]})
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("errors", r.json()["detail"])
+
+    def test_apply_rejects_noop_and_bad_combo(self):
+        v1 = self._seed_version()
+        r = self.c.post("/assistant/apply", json={
+            "parent_version": v1,
+            "patch": [{"op": "replace", "path": "/seed", "value": 7}]})
+        self.assertEqual(r.status_code, 422)
+        r = self.c.post("/assistant/apply", json={
+            "parent_version": v1, "parent_run_id": "x",
+            "patch": [{"op": "replace", "path": "/seed", "value": 8}]})
+        self.assertEqual(r.status_code, 422)
+        r = self.c.post("/assistant/apply", json={"parent_version": v1})
+        self.assertEqual(r.status_code, 422)
+
+    def test_apply_from_run_compares_fairly(self):
+        r = self.c.post("/runs", json={"scenario": tiny_synth("swap_remote")})
+        rid = r.json()["run_id"]
+        r = self.c.post("/assistant/apply", json={
+            "parent_run_id": rid, "note": "try local_only",
+            "patch": [{"op": "replace", "path": "/policy/name",
+                       "value": "local_only"}]})
+        self.assertEqual(r.status_code, 202, r.text)
+        body = r.json()
+        self.assertEqual(body["status"], "completed")
+        self.assertIsNotNone(body["compare"])
+        self.assertEqual(body["compare"]["verdict"], "fair")
+
+    def test_apply_instruction_uses_model(self):
+        v1 = self._seed_version()
+        new = tiny_synth("swap_remote", seed=13)
+        FakeClient.content = json.dumps(new)
+        r = self.c.post("/assistant/apply", json={
+            "parent_version": v1, "instruction": "use seed 13"})
+        self.assertEqual(r.status_code, 202, r.text)
+        body = r.json()
+        self.assertEqual(body["model"], "fake-muse")
+        self.assertEqual(body["status"], "completed")
+        r = self.c.get(f"/scenarios/version/{body['version']}")
+        self.assertEqual(r.json()["scenario"]["seed"], 13)
+
+    def test_rollback_reruns_version(self):
+        v1 = self._seed_version()
+        r = self.c.post("/assistant/apply", json={
+            "parent_version": v1,
+            "patch": [{"op": "replace", "path": "/seed", "value": 11}]})
+        v2 = r.json()["version"]
+        r = self.c.post("/assistant/rollback", json={
+            "to_version": v1, "from_version": v2, "note": "seed 11 was worse"})
+        self.assertEqual(r.status_code, 202, r.text)
+        body = r.json()
+        self.assertEqual(body["status"], "completed")
+        self.assertNotEqual(body["version"], v1)
+        rec = self.c.get(f"/scenarios/version/{body['version']}").json()
+        self.assertEqual(rec["rollback_to"], v1)
+        self.assertEqual(rec["scenario"]["seed"], 7)
+
+    def test_rollback_unknown_is_404(self):
+        r = self.c.post("/assistant/rollback", json={"to_version": "nope"})
+        self.assertEqual(r.status_code, 404)
+
+    def _run_id(self):
+        r = self.c.post("/runs", json={"scenario": tiny_synth()})
+        return r.json()["run_id"]
+
+    def test_chat_suggest_patch_valid(self):
+        rid = self._run_id()
+        FakeClient.chunks = [{"choices": [{"delta": {"content":
+            "Try seed 8.\n```patch\n"
+            '[{"op": "replace", "path": "/seed", "value": 8}]\n```'}}]}]
+        r = self.c.post("/assistant/chat", json={
+            "messages": [{"role": "user", "content": "what should I try?"}],
+            "context": {"run_id": rid}, "suggest_patch": True})
+        self.assertEqual(r.status_code, 200, r.text)
+        sp = r.json()["suggested_patch"]
+        self.assertTrue(sp["valid"], sp)
+        self.assertEqual(sp["ops"][0]["value"], 8)
+        self.assertEqual(len(sp["changes"]), 1)
+
+    def test_chat_suggest_patch_invalid(self):
+        rid = self._run_id()
+        FakeClient.chunks = [{"choices": [{"delta": {"content":
+            "```patch\n"
+            '[{"op": "remove", "path": "/nodes"}]\n```'}}]}]
+        r = self.c.post("/assistant/chat", json={
+            "messages": [], "context": {"run_id": rid},
+            "suggest_patch": True})
+        self.assertEqual(r.status_code, 200, r.text)
+        sp = r.json()["suggested_patch"]
+        self.assertFalse(sp["valid"])
+        self.assertGreater(len(sp["errors"]), 0)
+
+    def test_chat_suggest_patch_absent_is_none(self):
+        rid = self._run_id()
+        FakeClient.chunks = [{"choices": [{"delta": {"content": "looks fine"}}]}]
+        r = self.c.post("/assistant/chat", json={
+            "messages": [], "context": {"run_id": rid},
+            "suggest_patch": True})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIsNone(r.json()["suggested_patch"])
+
+    def test_chat_suggest_patch_needs_run_and_no_stream(self):
+        r = self.c.post("/assistant/chat", json={
+            "messages": [], "suggest_patch": True})
+        self.assertEqual(r.status_code, 422)
+        rid = self._run_id()
+        r = self.c.post("/assistant/chat", json={
+            "messages": [], "context": {"run_id": rid},
+            "suggest_patch": True, "stream": True})
+        self.assertEqual(r.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

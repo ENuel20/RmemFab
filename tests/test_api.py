@@ -81,7 +81,7 @@ class ApiContract(unittest.TestCase):
         body = r.json()
         self.assertEqual(body["status"], "ok")
         self.assertTrue(body["replay_supported"])
-        self.assertFalse(body["faults_supported"])
+        self.assertTrue(body["faults_supported"])
         self.assertIn("config", body["schema_versions"])
 
     def test_validate_ok_and_broken(self):
@@ -160,6 +160,8 @@ class ApiContract(unittest.TestCase):
         detail = r.json()
         self.assertIn("summary", detail)
         self.assertIn("manifest", detail)
+        self.assertIn("scenario", detail)
+        self.assertEqual(detail["scenario"]["name"], "phase1-overflow")
         self.assertGreater(detail["summary"]["access"]["count"], 0)
         r = self.c.get("/runs/does-not-exist")
         self.assertEqual(r.status_code, 404)

@@ -1,9 +1,9 @@
 """Run API + Trace API + Scenario API (PRODUCT-SPEC section 5).
 
 Thin HTTP wrapper over the existing engine: validation, runs, telemetry
-reads, guarded comparison, export, and trace upload. The engine runs inline
-on POST /runs (a job queue is the documented follow-up); the assistant
-endpoint is an honest stub until the M4 thin slice.
+reads, guarded comparison, export, trace upload, and the assistant
+(draft, grounded chat, apply/rollback). The engine runs inline on
+POST /runs (a job queue is the documented follow-up).
 """
 from __future__ import annotations
 
@@ -22,7 +22,8 @@ from ..core.engine import Engine
 from ..sweep.compare import ComparisonRefused, compare_runs
 from ..trace.replay import ReplayDivergence, ReplayEngine
 from ..trace.validate import TraceError, load_trace
-from .draft import CHAT_SYSTEM, build_messages, telemetry_brief
+from .draft import (CHAT_SYSTEM, SUGGEST_SUFFIX, build_messages,
+                   extract_patch_block, telemetry_brief)
 from .providers import (BasetenClient, ProviderError, ProviderNotConfigured)
 from .store import RunStore, TraceStore, split_error, trace_profile
 
@@ -69,6 +70,24 @@ class ChatRequest(BaseModel):
     messages: list[dict] = Field(default_factory=list)
     context: dict = Field(default_factory=dict)
     stream: bool = False
+    suggest_patch: bool = False
+
+
+class ApplyRequest(BaseModel):
+    parent_run_id: str | None = None
+    parent_version: str | None = None
+    patch: list[PatchOp] | None = None
+    instruction: str | None = None
+    note: str | None = None
+    max_tokens: int = 8000
+    no_events: bool = False
+
+
+class RollbackRequest(BaseModel):
+    to_version: str
+    from_version: str | None = None
+    note: str | None = None
+    no_events: bool = False
 
 
 class DraftRequest(BaseModel):
@@ -151,7 +170,7 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
         return {"status": "ok", "rmemfab_version": __version__,
                 "schema_versions": {"config": "0.1", "trace": "0.1",
                                     "events": "0.1"},
-                "replay_supported": True, "faults_supported": False}
+                "replay_supported": True, "faults_supported": True}
 
     @app.post("/scenarios/validate", response_model=ValidateResponse)
     def scenarios_validate(req: ValidateRequest):
@@ -194,10 +213,10 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
     def scenarios_version_get(version: str):
         return _load_version(version)
 
-    @app.post("/runs", status_code=202)
-    def runs_submit(req: RunRequest):
+    def _execute_run(scenario: dict, no_events: bool) -> dict:
+        """Build, run inline, and report {run_id, status[, error]}."""
         try:
-            sc = build_scenario(copy.deepcopy(req.scenario))
+            sc = build_scenario(copy.deepcopy(scenario))
         except ScenarioError as exc:
             raise HTTPException(
                 422, [split_error(e) for e in exc.errors])
@@ -212,9 +231,9 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
         if (final / "summary.json").is_file():
             return {"run_id": run_id, "status": "completed"}
         engine = (ReplayEngine(sc, sc.trace, final,
-                               event_log=not req.no_events)
+                               event_log=not no_events)
                   if is_trace else Engine(sc, final,
-                                          event_log=not req.no_events))
+                                          event_log=not no_events))
         try:
             engine.run()
         except ReplayDivergence as exc:
@@ -224,6 +243,10 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
                             "error": str(exc)}), encoding="utf-8")
             return {"run_id": run_id, "status": "failed", "error": str(exc)}
         return {"run_id": run_id, "status": "completed"}
+
+    @app.post("/runs", status_code=202)
+    def runs_submit(req: RunRequest):
+        return _execute_run(req.scenario, req.no_events)
 
     @app.get("/runs")
     def runs_list(limit: int = Query(50, ge=1, le=500),
@@ -374,6 +397,10 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
 
     @app.post("/assistant/chat")
     def assistant_chat(req: ChatRequest):
+        if req.suggest_patch and req.stream:
+            raise HTTPException(422, "suggest_patch needs stream=false")
+        if req.suggest_patch and (req.context or {}).get("run_id") is None:
+            raise HTTPException(422, "suggest_patch needs context.run_id")
         run_id = (req.context or {}).get("run_id")
         brief = None
         if run_id is not None:
@@ -388,6 +415,8 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
         system = CHAT_SYSTEM + (f"\n\nRun telemetry:\n{brief}"
                                 if brief is not None else
                                 "\n\nNo run telemetry provided.")
+        if req.suggest_patch:
+            system += "\n\n" + SUGGEST_SUFFIX
         messages = [{"role": "system", "content": system},
                     *req.messages]
         if not req.stream:
@@ -400,8 +429,11 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
                 return (ch.get("delta") or {}).get("content", "") or ""
             text = "".join(_delta(c) for c in chunks
                             if isinstance(c, dict))
-            return {"content": text, "model": client.model,
+            body = {"content": text, "model": client.model,
                     "run_id": run_id}
+            if req.suggest_patch:
+                body["suggested_patch"] = _suggest_patch(text, run_id)
+            return body
         try:
             stream = client.chat_stream(messages)
             first = next(stream)
@@ -421,5 +453,160 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(generate(), media_type="text/event-stream")
+
+    def _suggest_patch(text: str, run_id: str):
+        """Validate the model's ```patch block against the run's scenario.
+
+        Returns None when the model emitted no block, else {ops, valid,
+        errors[, changes]}. A suggestion is data, never an action: applying
+        it is POST /assistant/apply's job."""
+        try:
+            raw_ops = extract_patch_block(text)
+        except ValueError as exc:
+            return {"ops": None, "valid": False,
+                    "errors": [{"message": str(exc)}]}
+        if raw_ops is None:
+            return None
+        try:
+            ops = [o if isinstance(o, PatchOp) else PatchOp(**o)
+                   for o in raw_ops]
+        except (TypeError, ValueError) as exc:
+            return {"ops": raw_ops, "valid": False,
+                    "errors": [{"message": f"bad patch op: {exc}"}]}
+        base = runs.scenario_of(run_id)
+        if base is None:
+            return {"ops": raw_ops, "valid": False,
+                    "errors": [{"message": "run has no scenario"}]}
+        try:
+            new, changes = _apply_patch(base, ops)
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            return {"ops": raw_ops, "valid": False,
+                    "errors": [{"message": f"bad patch: {exc}"}]}
+        errors, warnings, _ = validate(new, for_run=True)
+        if errors:
+            return {"ops": raw_ops, "valid": False,
+                    "errors": [split_error(e) for e in errors],
+                    "warnings": warnings}
+        return {"ops": raw_ops, "valid": True, "errors": [],
+                "warnings": warnings, "changes": changes}
+
+    @app.post("/assistant/apply", status_code=202)
+    def assistant_apply(req: ApplyRequest):
+        """Apply a patch (or NL instruction) to a run/version, validate,
+        store a new version, run it, and compare against the parent run."""
+        if (req.parent_run_id is None) == (req.parent_version is None):
+            raise HTTPException(
+                422, "need exactly one of parent_run_id, parent_version")
+        if req.parent_run_id is not None:
+            base = runs.scenario_of(req.parent_run_id)
+            if base is None:
+                raise HTTPException(
+                    404, f"unknown run or run has no scenario: {req.parent_run_id!r}")
+        else:
+            base = _load_version(req.parent_version)["scenario"]
+        if (req.patch is None) == (req.instruction is None):
+            raise HTTPException(422, "need exactly one of patch, instruction")
+        model = usage = None
+        changes: list = []
+        if req.instruction is not None:
+            try:
+                client = BasetenClient()
+            except ProviderNotConfigured as exc:
+                raise HTTPException(503, str(exc))
+            try:
+                out = client.chat(build_messages(req.instruction, base),
+                                  max_tokens=req.max_tokens, temperature=0,
+                                  json_mode=True)
+            except ProviderError as exc:
+                raise HTTPException(502, str(exc))
+            try:
+                new = json.loads(out["content"])
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    422, {"error": "model output was not JSON",
+                          "raw_excerpt": out["content"][:1000]})
+            if not isinstance(new, dict):
+                raise HTTPException(
+                    422, {"error": "model output was not an object",
+                          "raw_excerpt": out["content"][:1000]})
+            model, usage = out["model"], out["usage"]
+        else:
+            try:
+                new, changes = _apply_patch(base, req.patch)
+            except (KeyError, IndexError, TypeError, ValueError) as exc:
+                raise HTTPException(422, f"bad patch: {exc}")
+            if canonical_json(new) == canonical_json(base):
+                raise HTTPException(422, "patch leaves the scenario unchanged")
+        errors, warnings, assumed = validate(new, for_run=True)
+        if errors:
+            raise HTTPException(
+                422, {"errors": [split_error(e) for e in errors],
+                      "warnings": warnings, "assumed": assumed})
+        version = scenario_hash(new)[:16]
+        (versions_dir / f"{version}.json").write_text(
+            json.dumps({"version": version,
+                        "parent_version": req.parent_version,
+                        "parent_run_id": req.parent_run_id, "note": req.note,
+                        "instruction": req.instruction, "model": model,
+                        "scenario": json.loads(canonical_json(new))},
+                       indent=2, sort_keys=True), encoding="utf-8")
+        res = _execute_run(new, req.no_events)
+        compare = None
+        if req.parent_run_id is not None and res["status"] == "completed":
+            pdir = runs.bundle_dir(req.parent_run_id)
+            ndir = runs.bundle_dir(res["run_id"])
+            if pdir is not None and runs.status_of(pdir) == "completed":
+                try:
+                    rep = compare_runs([pdir, ndir])
+                except ComparisonRefused as exc:
+                    compare = {"verdict": "refused", "reason": str(exc)}
+                else:
+                    if "verdict" in rep:
+                        rep["verdict_detail"] = rep.pop("verdict")
+                    compare = {"verdict": "fair", **rep}
+        body: dict = {"version": version,
+                      "parent_version": req.parent_version,
+                      "parent_run_id": req.parent_run_id,
+                      "run_id": res["run_id"], "status": res["status"],
+                      "compare": compare,
+                      "validation": {"warnings": warnings, "assumed": assumed}}
+        if changes:
+            body["changes"] = changes
+        if model is not None:
+            body["model"] = model
+            body["usage"] = usage
+        if res["status"] == "failed":
+            body["error"] = res.get("error")
+        return body
+
+    @app.post("/assistant/rollback", status_code=202)
+    def assistant_rollback(req: RollbackRequest):
+        """Re-run a stored version as a new audited rollback version."""
+        target = _load_version(req.to_version)
+        if req.from_version is not None:
+            _load_version(req.from_version)
+        scenario = copy.deepcopy(target["scenario"])
+        errors, warnings, assumed = validate(scenario, for_run=True)
+        if errors:
+            raise HTTPException(
+                422, {"errors": [split_error(e) for e in errors],
+                      "warnings": warnings, "assumed": assumed})
+        envelope = {"scenario": scenario, "rollback_to": req.to_version,
+                    "from_version": req.from_version, "note": req.note}
+        version = scenario_hash(envelope)[:16]
+        (versions_dir / f"{version}.json").write_text(
+            json.dumps({"version": version,
+                        "parent_version": req.from_version,
+                        "rollback_to": req.to_version, "note": req.note,
+                        "scenario": json.loads(canonical_json(scenario))},
+                       indent=2, sort_keys=True), encoding="utf-8")
+        res = _execute_run(scenario, req.no_events)
+        body = {"version": version, "run_id": res["run_id"],
+                "status": res["status"], "to_version": req.to_version,
+                "from_version": req.from_version,
+                "validation": {"warnings": warnings, "assumed": assumed}}
+        if res["status"] == "failed":
+            body["error"] = res.get("error")
+        return body
 
     return app

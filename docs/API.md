@@ -42,7 +42,7 @@ on version strings.
 ```json
 {"status": "ok", "rmemfab_version": "0.1.0",
  "schema_versions": {"config": "0.1", "trace": "0.1", "events": "0.1"},
- "replay_supported": true, "faults_supported": false}
+ "replay_supported": true, "faults_supported": true}
 ```
 
 ### `POST /scenarios/validate` → `{valid, errors[], warnings[], assumed[]}`
@@ -92,11 +92,13 @@ Strip shape (all nullable-in-failure fields included):
 `policy=hot_cold` filters by effective policy; `status=failed|completed`.
 `limit` default 50, max 500.
 
-### `GET /runs/{id}` → `{run_id, status, summary, manifest, error}`
+### `GET /runs/{id}` → `{run_id, status, summary, manifest, scenario, error}`
 
 `summary` is the full `summary.json` (`access`, `traffic`, `links`, `memory`,
-`requests`, `policy`, `workload`, …) and `manifest` the full `manifest.json`
-(hashes, seed, assumptions, warnings, limitations, routes). `summary` is null
+`requests`, `policy`, `workload`, …), `manifest` the full `manifest.json`
+(hashes, seed, assumptions, warnings, limitations, routes), and `scenario`
+the saved `scenario.json` (`nodes`, `fabric`, `workload`, `policy`, …) —
+render infrastructure topology from it. `summary` and `scenario` are null
 on failed runs; `error` carries the divergence message. 404 for unknown ids.
 
 ### `GET /runs/{id}/series?downsample=N` → `SeriesPoint[]`
@@ -173,13 +175,42 @@ versions (usable as `parent_version` here or in `/scenarios/version`).
 
 ### `POST /assistant/chat` → answer or SSE stream
 
-Body: `{messages[], context{run_id?}, stream?}`. With `context.run_id` the
-server injects a compact telemetry brief and instructs the model to answer
-only from it (exact numbers, no invention); without it the model is told no
-telemetry was provided. `stream: false` (default) returns
-`{content, model, run_id}`; `stream: true` returns OpenAI-style SSE chunks
-plus `data: [DONE]`. Unknown run → 404; missing key → 503; provider
+Body: `{messages[], context{run_id?}, stream?, suggest_patch?}`. With
+`context.run_id` the server injects a compact telemetry brief and instructs
+the model to answer only from it (exact numbers, no invention); without it
+the model is told no telemetry was provided. `stream: false` (default)
+returns `{content, model, run_id}`; `stream: true` returns OpenAI-style SSE
+chunks plus `data: [DONE]`. Unknown run → 404; missing key → 503; provider
 failure → 502 (mid-stream failures arrive as a `data: {"error": …}` chunk).
+
+With `suggest_patch: true` (requires `context.run_id`, `stream: false`)
+the model is asked to also emit any recommended change as a
+` ```patch ` fenced JSON-patch block; the server validates it against the
+run's scenario and returns `suggested_patch: {ops, valid, errors[],
+warnings[], changes?}`, or `null` when the model emitted no block. A
+suggestion is data, never an action — applying it is `POST
+/assistant/apply`'s job.
+
+### `POST /assistant/apply` → `{version, run_id, status, compare?}`
+
+Body: exactly one of `parent_run_id` / `parent_version`, exactly one of
+`patch[]` (JSON-patch ops) / `instruction` (natural language), plus optional
+`note`, `max_tokens`, `no_events`. The server resolves the base scenario,
+derives the new one (model-proposed scenarios go through the same
+validate-before-store path as `/scenarios/draft`), rejects no-op patches,
+validates, stores a version linked to its parent, runs it inline, and —
+for run parents where both runs completed — attaches the guarded
+`compare` verdict (`fair` or `refused`, same semantics as
+`POST /runs/compare`). Invalid change → 422 with validator errors and
+nothing is stored or run.
+
+### `POST /assistant/rollback` → `{version, run_id, status}`
+
+Body: `{to_version, from_version?, note?, no_events?}`. Re-runs a stored
+version as a new audited rollback version (event-addressed, so the
+rollback record never collides with the original even though the scenario
+is identical). The new version records `rollback_to` + `from_version`,
+is re-validated, and is executed inline. Unknown version → 404.
 
 ## Errors
 

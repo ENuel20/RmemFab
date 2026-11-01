@@ -54,6 +54,40 @@ the run telemetry provided below; quote exact numbers with units; say plainly
 when the data does not support an answer; never invent metrics, events, or
 page identities. Keep answers short unless asked for detail."""
 
+SUGGEST_SUFFIX = """When you propose a configuration change, ALSO emit it as a
+JSON patch in exactly one fenced block:
+
+```patch
+[{"op": "replace", "path": "/seed", "value": 11}]
+```
+
+Ops are replace/add/remove against the run's scenario (JSON-pointer paths).
+Emit the block only for changes you actually recommend; the server validates
+the patch and reports errors, so never claim a change was applied."""
+
+
+def extract_patch_block(text: str):
+    """Return the first ```patch fenced payload as a list, None when absent.
+
+    Raises ValueError when the fence is present but the payload is not a
+    JSON array (the caller reports this as an invalid suggestion, never as
+    a server error).
+    """
+    start = text.find("```patch")
+    if start < 0:
+        return None
+    payload = text[start + len("```patch"):]
+    end = payload.find("```")
+    if end < 0:
+        raise ValueError("unterminated ```patch block")
+    try:
+        ops = json.loads(payload[:end])
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"patch block is not JSON: {exc}") from None
+    if not isinstance(ops, list):
+        raise ValueError("patch block must be a JSON array of ops")
+    return ops
+
 
 def telemetry_brief(detail: dict) -> str:
     """Compact grounded context: summary essentials, bounded size."""
