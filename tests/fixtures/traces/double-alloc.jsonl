@@ -1,0 +1,3 @@
+{"type": "header", "trace_version": "0.1", "source": "test"}
+{"ts_ns": 0, "op": "alloc", "page_id": "p1", "bytes": 1024}
+{"ts_ns": 10, "op": "alloc", "page_id": "p1", "bytes": 1024}

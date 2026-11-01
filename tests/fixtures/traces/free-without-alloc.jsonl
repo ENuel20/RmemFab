@@ -1,0 +1,2 @@
+{"type": "header", "trace_version": "0.1", "source": "test"}
+{"ts_ns": 10, "op": "free", "page_id": "p9", "bytes": 1024}
