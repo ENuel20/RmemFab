@@ -91,7 +91,7 @@ Pages are the unit of placement and accounting:
 
 - `page_size_bytes` is configurable (for example 4 KiB, 64 KiB, or 2 MiB).
 - A page has an abstract identifier (trace-provided or generated), an owner context, and a size.
-- A page is resident in exactly one tier at a time unless the policy is explicitly replicating.
+- A page is resident in exactly one tier of one node at a time unless the policy is explicitly replicating.
 - Migration creates a transfer event and a state transition; the old copy is invalidated on completion.
 - Eviction frees capacity and may write back if the page is dirty.
 

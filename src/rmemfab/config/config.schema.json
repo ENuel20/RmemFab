@@ -78,6 +78,9 @@
           "items": {
             "$ref": "#/$defs/link"
           }
+        },
+        "switch": {
+          "$ref": "#/$defs/switch"
         }
       }
     },
@@ -300,6 +303,27 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 1000000
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "switch": {
+      "type": "object",
+      "description": "Single switch shared by all compute-pool transfers (bisection cap). Use 'switches' for named multi-switch fabrics; both forms together are rejected.",
+      "additionalProperties": false,
+      "required": [
+        "bandwidth_bytes_per_ns"
+      ],
+      "properties": {
+        "bandwidth_bytes_per_ns": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "latency_ns": {
+          "type": "number",
+          "minimum": 0
         },
         "provenance": {
           "$ref": "#/$defs/provenance"
