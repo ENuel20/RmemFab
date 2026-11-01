@@ -135,6 +135,24 @@ def _cmd_export(a) -> int:
     return 0
 
 
+def _cmd_serve(a) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print("error: rmemfab serve needs the api extra "
+              "(pip install 'rmemfab[api]')", file=sys.stderr)
+        return 1
+    from .api import create_app
+    app = create_app(runs_dir=a.runs_dir, traces_dir=a.traces_dir)
+    print(f"serving RmemFab API on http://{a.host}:{a.port} "
+          f"(runs={a.runs_dir} traces={a.traces_dir})")
+    if a.open:
+        import webbrowser
+        webbrowser.open(f"http://{a.host}:{a.port}/docs")
+    uvicorn.run(app, host=a.host, port=a.port)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="rmemfab", description="Remote Memory Fabric Simulator")
     ap.add_argument("--version", action="version", version=f"rmemfab {__version__}")
@@ -185,6 +203,14 @@ def main(argv=None) -> int:
     e.add_argument("--out", required=True, help="export output directory")
     e.add_argument("--format", choices=["csv", "json"], default="csv")
     e.set_defaults(fn=_cmd_export)
+    s = sub.add_parser("serve", help="serve the Run API on localhost")
+    s.add_argument("--host", default="127.0.0.1")
+    s.add_argument("--port", type=int, default=8000)
+    s.add_argument("--runs-dir", default="runs")
+    s.add_argument("--traces-dir", default="traces/uploads")
+    s.add_argument("--open", action="store_true",
+                   help="open the API docs in a browser")
+    s.set_defaults(fn=_cmd_serve)
     a = ap.parse_args(argv)
     return a.fn(a)
 
