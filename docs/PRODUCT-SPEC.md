@@ -189,6 +189,7 @@ The model MUST NEVER bypass `validate_scenario`, MUST NEVER submit raw simulatio
 - **M2 — Real runs.** S4 on live bundles (charts from §4 shapes, playback via SSE replay, paged events) + S3 submit-through-backend + export. Steps 3–4 of the demo go live.
 - **M3 — Traces.** S2 import/inspect; `Run on trace` stays disabled until engine replay; Glimmer fixture renders with its limitation note. Step 1 goes live (inspect).
 - **M4 — Muse thin slice.** S1 NL→draft + S6 Q&A/what-if over `get_run_metrics`/`explain_events`/guarded `compare_runs`. Steps 2, 6, 7 go live. Sweeps, Wonder reports, Perfetto, 3D, voice stay out.
+- **M5 — Capacity planner (P1, post-demo; the "Cerebras workflow", kept generic).** Given devices (capacity/latency/bandwidth per tier, from presets) + model geometry (per-layer-class KV bytes, weights bytes, context, dtype) + serving target (concurrency or latency bound), compute: per-device weights-vs-KV partition, max sustainable concurrency, and the binding constraint — then hand off to simulation for what the static math can't see (bursts, drift, queueing). No vendor or model names in code; K3-style hybrids and Llama-style dense models are both just parameter sets. Inputs/outputs reuse the §4 contracts; no engine changes required.
 
 ## 10. Out of scope (do not build)
 

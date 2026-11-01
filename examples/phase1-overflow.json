@@ -125,6 +125,6 @@
   "output": {
     "format": "jsonl",
     "path": "runs/phase1-overflow",
-    "include_event_log": false
+    "include_event_log": true
   }
 }
