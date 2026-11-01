@@ -258,6 +258,7 @@ class RmemFabApiClient {
       duration_ns: scenario.duration_ns,
       status: 'completed',
       created_at: new Date().toISOString(),
+      is_demo: true,
       metrics: {
         latency_ns: { p50: 125, p95: 185, p99: 250, mean: 130, max: 320 },
         stall_time_ns: 1200000,

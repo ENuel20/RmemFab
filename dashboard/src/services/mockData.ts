@@ -434,6 +434,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
     duration_ns: 60000000000,
     status: 'completed',
     created_at: '2026-10-29 10:45:00',
+    is_demo: true,
     metrics: {
       latency_ns: {
         p50: 142.4,
@@ -473,6 +474,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
     duration_ns: 60000000000,
     status: 'completed',
     created_at: '2026-10-29 11:15:00',
+    is_demo: true,
     metrics: {
       latency_ns: {
         p50: 231.8,
@@ -518,6 +520,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
     duration_ns: 60000000000,
     status: 'completed',
     created_at: '2026-10-29 11:35:00',
+    is_demo: true,
     metrics: {
       latency_ns: {
         p50: 92.5,
@@ -563,6 +566,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
     duration_ns: 120000000000,
     status: 'completed',
     created_at: '2026-10-29 11:50:00',
+    is_demo: true,
     metrics: {
       latency_ns: {
         p50: 310.2,
@@ -602,6 +606,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
     duration_ns: 120000000000,
     status: 'completed',
     created_at: '2026-10-29 12:05:00',
+    is_demo: true,
     metrics: {
       latency_ns: {
         p50: 480.6,
@@ -641,6 +646,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
     duration_ns: 45000000000,
     status: 'completed',
     created_at: '2026-10-29 12:15:00',
+    is_demo: true,
     metrics: {
       latency_ns: {
         p50: 168.0,

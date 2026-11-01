@@ -65,6 +65,10 @@ export interface SimulationRun {
   time_series: TimeSeriesPoint[]
   bottleneck: BottleneckAnalysis
   scenario_snapshot: ScenarioConfig
+  engine_version?: string
+  trace_hash?: string
+  percentile_interpolation?: string
+  is_demo?: boolean
 }
 
 export interface KpiMetric {

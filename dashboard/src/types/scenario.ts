@@ -103,6 +103,7 @@ export interface SyntheticWorkloadConfig {
 export interface TraceWorkloadConfig {
   type: 'trace'
   path: string
+  trace_hash?: string
   format?: 'jsonl'
   sort?: boolean
   round_bytes?: boolean
@@ -146,6 +147,7 @@ export interface MetricsConfig {
   percentiles?: number[]
   sample_interval_ns?: number
   warmup_ns?: number
+  percentile_interpolation?: string
 }
 
 export interface CostModelConfig {

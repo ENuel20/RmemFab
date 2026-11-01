@@ -7,15 +7,20 @@ import {
   formatPercent
 } from '../../utils/formatters'
 import {
+  evaluateComparisonEligibility,
+  type FairnessCheckItem
+} from '../../utils/comparisonGuard'
+import {
   GitCompare,
   AlertTriangle,
   CheckCircle2,
-  HelpCircle,
   TrendingDown,
   Layers,
   Zap,
   ArrowRight,
-  Activity
+  Activity,
+  ShieldAlert,
+  Info
 } from 'lucide-react'
 import {
   BarChart,
@@ -35,14 +40,6 @@ interface PolicyComparisonViewProps {
   onSelectBenchmarkPair: () => void
 }
 
-type CheckStatus = 'match' | 'mismatch' | 'unknown'
-
-interface FairnessCheckItem {
-  name: string
-  status: CheckStatus
-  details: string
-}
-
 export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
   runs,
   selectedRunIds,
@@ -51,260 +48,10 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
 }) => {
   const selectedRuns = runs.filter((r) => selectedRunIds.includes(r.id))
 
-  // 4-Point Scientific Fairness Validation
-  const firstRun = selectedRuns[0]
+  // Run the strict comparison eligibility guard
+  const guardResult = evaluateComparisonEligibility(selectedRuns)
 
-  const seedCheck: FairnessCheckItem = (() => {
-    if (!firstRun) return { name: 'Random Seed', status: 'unknown', details: 'No runs selected' }
-    if (selectedRuns.some((r) => typeof r.seed !== 'number')) {
-      return { name: 'Random Seed', status: 'unknown', details: 'Cannot verify (seed metadata missing)' }
-    }
-    const allMatch = selectedRuns.every((r) => r.seed === firstRun.seed)
-    return {
-      name: 'Random Seed',
-      status: allMatch ? 'match' : 'mismatch',
-      details: allMatch
-        ? `Identical seed: ${firstRun.seed}`
-        : `Mismatched seeds: ${selectedRuns.map((r) => `${r.policy_name} (${r.seed})`).join(' vs ')}`
-    }
-  })()
-
-  const workloadCheck: FairnessCheckItem = (() => {
-    if (!firstRun) return { name: 'Workload Profile & Model', status: 'unknown', details: 'No runs selected' }
-    if (selectedRuns.some((r) => !r.workload_profile)) {
-      return { name: 'Workload Profile & Model', status: 'unknown', details: 'Cannot verify (workload profile metadata missing)' }
-    }
-    const profileMatch = selectedRuns.every((r) => r.workload_profile === firstRun.workload_profile)
-    if (!profileMatch) {
-      return {
-        name: 'Workload Profile & Model',
-        status: 'mismatch',
-        details: `Workload profiles differ: ${selectedRuns.map((r) => `${r.policy_name} (${r.workload_profile})`).join(' vs ')}`
-      }
-    }
-
-    // Deep compare workload parameters from scenario_snapshot if available
-    if (selectedRuns.some((r) => !r.scenario_snapshot?.workload)) {
-      return {
-        name: 'Workload Profile & Model',
-        status: 'unknown',
-        details: 'Cannot verify (workload snapshot parameters missing)'
-      }
-    }
-
-    const firstWl = firstRun.scenario_snapshot.workload
-    const paramDiffs: string[] = []
-
-    selectedRuns.slice(1).forEach((other) => {
-      const otherWl = other.scenario_snapshot.workload
-      if (firstWl.type !== otherWl.type) {
-        paramDiffs.push(`Workload type (${firstWl.type} vs ${otherWl.type})`)
-        return
-      }
-
-      if (firstWl.type === 'synthetic' && otherWl.type === 'synthetic') {
-        const m1 = firstWl.model || {}
-        const m2 = otherWl.model || {}
-        if (m1.layers !== m2.layers && (m1.layers !== undefined || m2.layers !== undefined)) {
-          paramDiffs.push(`Model layers (${m1.layers ?? '?'} vs ${m2.layers ?? '?'})`)
-        }
-        if (m1.attention_heads !== m2.attention_heads && (m1.attention_heads !== undefined || m2.attention_heads !== undefined)) {
-          paramDiffs.push(`Attention heads (${m1.attention_heads ?? '?'} vs ${m2.attention_heads ?? '?'})`)
-        }
-        if (m1.kv_heads !== m2.kv_heads && (m1.kv_heads !== undefined || m2.kv_heads !== undefined)) {
-          paramDiffs.push(`KV heads (${m1.kv_heads ?? '?'} vs ${m2.kv_heads ?? '?'})`)
-        }
-        if (m1.experts !== m2.experts && (m1.experts !== undefined || m2.experts !== undefined)) {
-          paramDiffs.push(`Experts (${m1.experts ?? '?'} vs ${m2.experts ?? '?'})`)
-        }
-        if (m1.top_k !== m2.top_k && (m1.top_k !== undefined || m2.top_k !== undefined)) {
-          paramDiffs.push(`Top-k (${m1.top_k ?? '?'} vs ${m2.top_k ?? '?'})`)
-        }
-
-        const r1 = firstWl.requests || {}
-        const r2 = otherWl.requests || {}
-        if (r1.concurrency !== r2.concurrency && (r1.concurrency !== undefined || r2.concurrency !== undefined)) {
-          paramDiffs.push(`Concurrency (${r1.concurrency ?? '?'} vs ${r2.concurrency ?? '?'})`)
-        }
-        if (r1.arrival_rate_per_second !== r2.arrival_rate_per_second && (r1.arrival_rate_per_second !== undefined || r2.arrival_rate_per_second !== undefined)) {
-          paramDiffs.push(`Arrival rate (${r1.arrival_rate_per_second ?? '?'} vs ${r2.arrival_rate_per_second ?? '?'})`)
-        }
-      } else if (firstWl.type === 'trace' && otherWl.type === 'trace') {
-        if (firstWl.path !== otherWl.path) {
-          paramDiffs.push(`Trace path (${firstWl.path} vs ${otherWl.path})`)
-        }
-      }
-    })
-
-    if (paramDiffs.length > 0) {
-      return {
-        name: 'Workload Profile & Model',
-        status: 'mismatch',
-        details: `Workload parameters differ: ${paramDiffs.slice(0, 3).join(', ')}${paramDiffs.length > 3 ? ` (+${paramDiffs.length - 3} more)` : ''}`
-      }
-    }
-
-    return {
-      name: 'Workload Profile & Model',
-      status: 'match',
-      details: `Identical profile (${firstRun.workload_profile}) and model/request parameters`
-    }
-  })()
-
-  const durationCheck: FairnessCheckItem = (() => {
-    if (!firstRun) return { name: 'Simulation Duration', status: 'unknown', details: 'No runs selected' }
-    if (selectedRuns.some((r) => typeof r.duration_ns !== 'number')) {
-      return { name: 'Simulation Duration', status: 'unknown', details: 'Cannot verify (duration metadata missing)' }
-    }
-    const allMatch = selectedRuns.every((r) => r.duration_ns === firstRun.duration_ns)
-    return {
-      name: 'Simulation Duration',
-      status: allMatch ? 'match' : 'mismatch',
-      details: allMatch
-        ? `Identical duration: ${formatNanoseconds(firstRun.duration_ns)}`
-        : `Mismatched durations: ${selectedRuns.map((r) => `${r.policy_name} (${formatNanoseconds(r.duration_ns)})`).join(' vs ')}`
-    }
-  })()
-
-  const hardwareCheck: FairnessCheckItem = (() => {
-    if (!firstRun) return { name: 'Hardware & Fabric Topology', status: 'unknown', details: 'No runs selected' }
-    if (
-      selectedRuns.some(
-        (r) =>
-          !r.scenario_snapshot ||
-          !Array.isArray(r.scenario_snapshot.nodes) ||
-          !r.scenario_snapshot.fabric ||
-          !Array.isArray(r.scenario_snapshot.fabric.links)
-      )
-    ) {
-      return {
-        name: 'Hardware & Fabric Topology',
-        status: 'unknown',
-        details: 'Cannot verify (hardware/fabric snapshot missing)'
-      }
-    }
-
-    const firstSnap = firstRun.scenario_snapshot
-    const topoDiffs: string[] = []
-
-    for (const other of selectedRuns.slice(1)) {
-      const snap = other.scenario_snapshot
-
-      // Node count comparison
-      if (snap.nodes.length !== firstSnap.nodes.length) {
-        topoDiffs.push(`Node count differs (${firstSnap.nodes.length} vs ${snap.nodes.length})`)
-        break
-      }
-
-      // Link count comparison
-      if (snap.fabric.links.length !== firstSnap.fabric.links.length) {
-        topoDiffs.push(`Fabric link count differs (${firstSnap.fabric.links.length} vs ${snap.fabric.links.length})`)
-        break
-      }
-
-      // Node-by-node detailed property comparison
-      for (const node of firstSnap.nodes) {
-        const otherNode = snap.nodes.find((n) => n.id === node.id)
-        if (!otherNode) {
-          topoDiffs.push(`Node "${node.id}" missing in ${other.policy_name}`)
-          continue
-        }
-        if (otherNode.role !== node.role) {
-          topoDiffs.push(`Node "${node.id}" role differs (${node.role} vs ${otherNode.role})`)
-        }
-
-        // Local memory configuration
-        if (node.local_memory && otherNode.local_memory) {
-          if (node.local_memory.capacity_bytes !== otherNode.local_memory.capacity_bytes) {
-            topoDiffs.push(
-              `Node "${node.id}" local capacity differs (${formatBytes(node.local_memory.capacity_bytes)} vs ${formatBytes(otherNode.local_memory.capacity_bytes)})`
-            )
-          }
-          if (node.local_memory.bandwidth_bytes_per_ns !== otherNode.local_memory.bandwidth_bytes_per_ns) {
-            topoDiffs.push(
-              `Node "${node.id}" local bandwidth differs (${node.local_memory.bandwidth_bytes_per_ns} vs ${otherNode.local_memory.bandwidth_bytes_per_ns} GB/s)`
-            )
-          }
-          if (node.local_memory.latency_ns !== otherNode.local_memory.latency_ns) {
-            topoDiffs.push(
-              `Node "${node.id}" local latency differs (${node.local_memory.latency_ns} vs ${otherNode.local_memory.latency_ns} ns)`
-            )
-          }
-        } else if (Boolean(node.local_memory) !== Boolean(otherNode.local_memory)) {
-          topoDiffs.push(`Node "${node.id}" local memory presence mismatch`)
-        }
-
-        // Remote memory configuration
-        if (node.remote_memory && otherNode.remote_memory) {
-          if (node.remote_memory.capacity_bytes !== otherNode.remote_memory.capacity_bytes) {
-            topoDiffs.push(
-              `Node "${node.id}" remote capacity differs (${formatBytes(node.remote_memory.capacity_bytes)} vs ${formatBytes(otherNode.remote_memory.capacity_bytes)})`
-            )
-          }
-          if (node.remote_memory.bandwidth_bytes_per_ns !== otherNode.remote_memory.bandwidth_bytes_per_ns) {
-            topoDiffs.push(
-              `Node "${node.id}" remote bandwidth differs (${node.remote_memory.bandwidth_bytes_per_ns} vs ${otherNode.remote_memory.bandwidth_bytes_per_ns} GB/s)`
-            )
-          }
-          if (node.remote_memory.latency_ns !== otherNode.remote_memory.latency_ns) {
-            topoDiffs.push(
-              `Node "${node.id}" remote latency differs (${node.remote_memory.latency_ns} vs ${otherNode.remote_memory.latency_ns} ns)`
-            )
-          }
-        } else if (Boolean(node.remote_memory) !== Boolean(otherNode.remote_memory)) {
-          topoDiffs.push(`Node "${node.id}" remote memory presence mismatch`)
-        }
-
-        // Compute accelerators configuration
-        if (node.compute && otherNode.compute) {
-          if (node.compute.accelerators !== otherNode.compute.accelerators) {
-            topoDiffs.push(`Node "${node.id}" accelerator count differs (${node.compute.accelerators} vs ${otherNode.compute.accelerators})`)
-          }
-          if (node.compute.accelerator !== otherNode.compute.accelerator) {
-            topoDiffs.push(`Node "${node.id}" accelerator type differs (${node.compute.accelerator} vs ${otherNode.compute.accelerator})`)
-          }
-        }
-      }
-
-      // Link-by-link connectivity & performance comparison
-      for (const link of firstSnap.fabric.links) {
-        const otherLink = snap.fabric.links.find((l) => l.id === link.id)
-        if (!otherLink) {
-          topoDiffs.push(`Fabric link "${link.id}" missing in ${other.policy_name}`)
-          continue
-        }
-        if (otherLink.from !== link.from || otherLink.to !== link.to) {
-          topoDiffs.push(`Fabric link "${link.id}" routing differs (${link.from}&rarr;${link.to} vs ${otherLink.from}&rarr;${otherLink.to})`)
-        }
-        if (otherLink.latency_ns !== link.latency_ns) {
-          topoDiffs.push(`Fabric link "${link.id}" latency differs (${link.latency_ns} vs ${otherLink.latency_ns} ns)`)
-        }
-        if (otherLink.bandwidth_bytes_per_ns !== link.bandwidth_bytes_per_ns) {
-          topoDiffs.push(`Fabric link "${link.id}" bandwidth differs (${link.bandwidth_bytes_per_ns} vs ${otherLink.bandwidth_bytes_per_ns} GB/s)`)
-        }
-      }
-    }
-
-    if (topoDiffs.length > 0) {
-      return {
-        name: 'Hardware & Fabric Topology',
-        status: 'mismatch',
-        details: `Hardware topology differs: ${topoDiffs.slice(0, 3).join('; ')}${topoDiffs.length > 3 ? ` (+${topoDiffs.length - 3} more)` : ''}`
-      }
-    }
-
-    return {
-      name: 'Hardware & Fabric Topology',
-      status: 'match',
-      details: `Identical topology: verified ${firstSnap.nodes.length} nodes (roles, local/remote memory) & ${firstSnap.fabric.links.length} fabric links`
-    }
-  })()
-
-  const fairnessChecks = [seedCheck, workloadCheck, durationCheck, hardwareCheck]
-  const isStrictFairComparison = fairnessChecks.every((c) => c.status === 'match')
-  const hasMismatch = fairnessChecks.some((c) => c.status === 'mismatch')
-
-  // Comparative chart data
+  // Comparative chart data (only calculated when eligible)
   const latencyData = selectedRuns.map((r) => ({
     name: r.policy_name,
     p50: r.metrics.latency_ns.p50,
@@ -359,7 +106,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
         </div>
       </div>
 
-      {/* Empty State when fewer than 2 runs are selected */}
+      {/* Case 1: Empty state (fewer than 2 runs selected) */}
       {selectedRuns.length < 2 && (
         <div
           className="card"
@@ -385,51 +132,166 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
         </div>
       )}
 
-      {selectedRuns.length >= 2 && (
-        <>
-          {/* Scientific Validation Guarantee Banner with 4-Point Breakdown */}
+      {/* Case 2: Run selection exceeds maximum (more than 4 runs selected) */}
+      {selectedRuns.length > 4 && (
+        <div
+          className="card"
+          style={{
+            backgroundColor: 'rgba(244, 63, 94, 0.08)',
+            borderColor: 'rgba(244, 63, 94, 0.4)',
+            padding: '24px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+            <AlertTriangle size={20} color="var(--accent-rose)" />
+            <h4 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent-rose)', margin: 0 }}>
+              Comparison Refused: Selection Exceeds Maximum (4 Runs)
+            </h4>
+          </div>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px 0' }}>
+            {guardResult.reason || 'You have selected more than 4 runs. Please narrow your selection to 2–4 runs to maintain statistical rigor and readable comparative visualizations.'}
+          </p>
+          <button className="btn btn-sm btn-outline" onClick={onSelectBenchmarkPair}>
+            <span>Reset to Baseline Pair (2 Runs)</span>
+          </button>
+        </div>
+      )}
+
+      {/* Case 3: 2-4 runs selected, but Comparison Guard REFUSES comparison */}
+      {selectedRuns.length >= 2 && selectedRuns.length <= 4 && !guardResult.eligible && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Refusal Notice Banner */}
           <div
             className="card"
             style={{
-              backgroundColor: isStrictFairComparison
-                ? 'rgba(16, 185, 129, 0.08)'
-                : hasMismatch
-                ? 'rgba(245, 158, 11, 0.08)'
-                : 'rgba(6, 182, 212, 0.08)',
-              borderColor: isStrictFairComparison
-                ? 'rgba(16, 185, 129, 0.35)'
-                : hasMismatch
-                ? 'rgba(245, 158, 11, 0.4)'
-                : 'rgba(6, 182, 212, 0.35)',
+              backgroundColor: 'rgba(244, 63, 94, 0.08)',
+              borderColor: 'rgba(244, 63, 94, 0.4)',
+              padding: '20px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+              <div
+                style={{
+                  padding: '8px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'rgba(244, 63, 94, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <ShieldAlert size={24} color="var(--accent-rose)" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                  <h4 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent-rose)', margin: 0 }}>
+                    Comparison Refused: Strict Scientific Eligibility Guard
+                  </h4>
+                  <Badge variant="rose">COMPARISON REFUSED</Badge>
+                </div>
+                <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '8px 0 4px 0', fontWeight: 500 }}>
+                  {guardResult.reason}
+                </p>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                  Per project specifications (<code>docs/POLICIES.md</code>): <em>&ldquo;If the guard cannot prove sameness, it refuses rather than warning.&rdquo;</em> A valid scientific comparison holds all controlled variables constant (hardware, workload parameters, trace content hash, seed, duration, warmup, page size, metric percentiles, engine version), varying ONLY the memory tiering policy.
+                </p>
+              </div>
+            </div>
+
+            {/* Checklist of Fairness Criteria */}
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(244, 63, 94, 0.2)' }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                Controlled Variables Audit Checklist:
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+                {guardResult.checks.map((check: FairnessCheckItem) => (
+                  <div
+                    key={check.id}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-card)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                        {check.name}
+                      </span>
+                      <Badge
+                        variant={
+                          check.status === 'match'
+                            ? 'emerald'
+                            : check.status === 'mismatch'
+                            ? 'rose'
+                            : 'blue'
+                        }
+                      >
+                        {check.status === 'match'
+                          ? 'MATCH'
+                          : check.status === 'mismatch'
+                          ? 'MISMATCH'
+                          : 'CANNOT VERIFY'}
+                      </Badge>
+                    </div>
+                    <span
+                      style={{ fontSize: '11px', color: 'var(--text-muted)' }}
+                      title={check.details}
+                    >
+                      {check.details}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Action suggestion */}
+            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Please select runs configured with identical scenario specifications, or use the benchmark preset.
+              </span>
+              <button className="btn btn-sm btn-outline" onClick={onSelectBenchmarkPair}>
+                <span>Select Compatible Benchmark Pair</span>
+                <ArrowRight size={12} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Case 4: 2-4 runs selected AND guardResult.eligible === true */}
+      {selectedRuns.length >= 2 && selectedRuns.length <= 4 && guardResult.eligible && (
+        <>
+          {/* Scientific Validation Guarantee Banner */}
+          <div
+            className="card"
+            style={{
+              backgroundColor: 'rgba(16, 185, 129, 0.08)',
+              borderColor: 'rgba(16, 185, 129, 0.35)',
               padding: '16px 20px'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {isStrictFairComparison ? (
-                  <CheckCircle2 size={18} color="var(--accent-emerald)" />
-                ) : hasMismatch ? (
-                  <AlertTriangle size={18} color="var(--accent-amber)" />
-                ) : (
-                  <HelpCircle size={18} color="var(--accent-cyan)" />
-                )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <CheckCircle2 size={18} color="var(--accent-emerald)" />
                 <span
                   style={{
                     fontSize: '14px',
                     fontWeight: 600,
-                    color: isStrictFairComparison
-                      ? 'var(--accent-emerald)'
-                      : hasMismatch
-                      ? 'var(--accent-amber)'
-                      : 'var(--accent-cyan)'
+                    color: 'var(--accent-emerald)'
                   }}
                 >
-                  {isStrictFairComparison
-                    ? 'Scientifically Fair Benchmark (All Controlled Variables Matched)'
-                    : hasMismatch
-                    ? 'Experimental Warning: Controlled Variable Mismatch Detected'
-                    : 'Comparison Status: Partially Verified'}
+                  Scientifically Fair Benchmark (All Controlled Variables Matched)
                 </span>
+                {/* Single-seed directional label required by specification */}
+                {guardResult.isSingleSeed && (
+                  <Badge variant="cyan">
+                    directional — single seed
+                  </Badge>
+                )}
               </div>
 
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
@@ -437,11 +299,33 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
               </span>
             </div>
 
-            {/* 4-Point Validator Grid */}
+            {/* Note regarding directional single seed */}
+            {guardResult.isSingleSeed && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '11px',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'rgba(6, 182, 212, 0.06)',
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  marginBottom: '12px'
+                }}
+              >
+                <Info size={14} color="var(--accent-cyan)" />
+                <span>
+                  <strong>Statistical note:</strong> This is a <code>directional — single seed</code> evaluation (Seed {selectedRuns[0].seed}). Results provide comparative guidance across algorithmic behaviors, but do not imply multi-seed confidence intervals or definitive statistical superiority.
+                </span>
+              </div>
+            )}
+
+            {/* Controlled Variables Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-              {fairnessChecks.map((check) => (
+              {guardResult.checks.map((check: FairnessCheckItem) => (
                 <div
-                  key={check.name}
+                  key={check.id}
                   style={{
                     padding: '8px 12px',
                     borderRadius: 'var(--radius-md)',
@@ -456,15 +340,12 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
                       {check.name}
                     </span>
-                    <Badge
-                      variant={
-                        check.status === 'match' ? 'emerald' : check.status === 'mismatch' ? 'amber' : 'blue'
-                      }
-                    >
-                      {check.status === 'match' ? 'MATCH' : check.status === 'mismatch' ? 'MISMATCH' : 'CANNOT VERIFY'}
-                    </Badge>
+                    <Badge variant="emerald">MATCH</Badge>
                   </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={check.details}>
+                  <span
+                    style={{ fontSize: '11px', color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                    title={check.details}
+                  >
                     {check.details}
                   </span>
                 </div>
