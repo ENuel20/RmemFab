@@ -412,7 +412,7 @@ def validate(raw, require_provenance: bool = False, for_run: bool = False, base_
         _validate_trace_workload(raw, wl, page, base_dir, errors, warnings)
     else:
         if wl.get("profile") not in IMPLEMENTED_PROFILES:
-            errors.append(RUN_ONLY + f"workload.profile: '{wl.get('profile')}' arrives in Phase 2 "
+            errors.append(RUN_ONLY + f"workload.profile: '{wl.get('profile')}' is not implemented "
                           f"(implemented: {', '.join(IMPLEMENTED_PROFILES)})")
         else:
             try:
@@ -430,7 +430,7 @@ def validate(raw, require_provenance: bool = False, for_run: bool = False, base_
     pol = raw["policy"]["name"]
     effective = pol if pol in IMPLEMENTED_POLICIES else FALLBACK_POLICY
     if pol not in IMPLEMENTED_POLICIES:
-        warnings.append(f"policy.name: '{pol}' arrives in a later phase; falling back to "
+        warnings.append(f"policy.name: '{pol}' is not implemented; falling back to "
                         f"'{FALLBACK_POLICY}' and recording the fallback in the manifest")
     try:
         _nodes, _pools, _links, _switches, _, _routes = _build_fabric(raw, errors)

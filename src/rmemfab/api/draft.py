@@ -33,8 +33,7 @@ requests{arrival_rate_per_second, concurrency, prompt_tokens,
 generated_tokens}} or {type: "trace", path} where path is server-visible.
 
 policy: {name} with name in local_only, swap_remote, hot_cold,
-frequency_aware, predictive_prefetch (cost_aware falls back to swap_remote),
-plus optional params{}.
+frequency_aware, predictive_prefetch, plus optional params{}.
 
 Units are bytes, nanoseconds, bytes/ns. Never invent fields: the schema
 rejects unknown properties. When a parent scenario is supplied, change as

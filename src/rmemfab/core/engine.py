@@ -1030,8 +1030,8 @@ class Engine:
 
     def _manifest(self, summary):
         sc = self.sc
-        notes = ["Fabric: each compute->pool link is a FIFO byte server and the pool is a shared byte server "
-                 "(aggregate pool service never exceeds pool bandwidth).",
+        notes = ["Fabric: links, pools, and switches are FIFO byte servers; transfers "
+                 "occupy every hop on their static route plus the destination tier.",
                  "Requests shard round-robin across compute nodes; each node runs an independent "
                  "policy instance and its own admission queue (concurrency is per node).",
                  "Clean evictions transfer 0 bytes; only dirty pages write back.",

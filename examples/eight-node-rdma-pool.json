@@ -1,0 +1,352 @@
+{
+  "$schema": "../SPECS/config.schema.json",
+  "version": "0.1",
+  "name": "eight-node-rdma-pool",
+  "description": "Eight compute nodes sharing one RDMA pool, running a synthetic KV-cache decode workload under frequency-aware tiering. Exercises multi-node pool contention over a star fabric. Single pool, no peer links, no expert/MoE modeling, no faults.",
+  "assumptions": [
+    "RDMA values are starting presets from docs/HARDWARE-MODELS.md, not measurements of a specific fabric.",
+    "The workload is synthetic KV-cache decode from generic GQA geometry, not a captured trace and not an MoE expert model.",
+    "Results are relative comparisons between policies until the scenario is calibrated against measured RDMA latency distributions."
+  ],
+  "seed": 7,
+  "duration_ns": 10000000000,
+  "warmup_ns": 1000000000,
+  "page_size_bytes": 2097152,
+  "nodes": [
+    {
+      "id": "node-0",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 402653184,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 384 MiB so one 4096-token KV cache (about 512 MiB) cannot fit and must spill to the pool.",
+          "date": "2026-11-01",
+          "uncertainty_pct": 25
+        }
+      }
+    },
+    {
+      "id": "node-1",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 402653184,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 384 MiB so one 4096-token KV cache (about 512 MiB) cannot fit and must spill to the pool.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      }
+    },
+    {
+      "id": "node-2",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 402653184,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 384 MiB so one 4096-token KV cache (about 512 MiB) cannot fit and must spill to the pool.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      }
+    },
+    {
+      "id": "node-3",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 402653184,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 384 MiB so one 4096-token KV cache (about 512 MiB) cannot fit and must spill to the pool.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      }
+    },
+    {
+      "id": "node-4",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 402653184,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 384 MiB so one 4096-token KV cache (about 512 MiB) cannot fit and must spill to the pool.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      }
+    },
+    {
+      "id": "node-5",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 402653184,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 384 MiB so one 4096-token KV cache (about 512 MiB) cannot fit and must spill to the pool.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      }
+    },
+    {
+      "id": "node-6",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 402653184,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 384 MiB so one 4096-token KV cache (about 512 MiB) cannot fit and must spill to the pool.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      }
+    },
+    {
+      "id": "node-7",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 402653184,
+        "latency_ns": 95,
+        "bandwidth_bytes_per_ns": 300,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 384 MiB so one 4096-token KV cache (about 512 MiB) cannot fit and must spill to the pool.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 25
+        }
+      }
+    },
+    {
+      "id": "remote-pool",
+      "role": "memory",
+      "remote_memory": {
+        "capacity_bytes": 549755813888,
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA preset",
+          "method": "RoCE/InfiniBand class one-way latency and per-port bandwidth; congestion behavior is not calibrated.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
+      }
+    }
+  ],
+  "fabric": {
+    "links": [
+      {
+        "id": "node-0-rdma",
+        "from": "node-0",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
+      },
+      {
+        "id": "node-1-rdma",
+        "from": "node-1",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
+      },
+      {
+        "id": "node-2-rdma",
+        "from": "node-2",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
+      },
+      {
+        "id": "node-3-rdma",
+        "from": "node-3",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
+      },
+      {
+        "id": "node-4-rdma",
+        "from": "node-4",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
+      },
+      {
+        "id": "node-5-rdma",
+        "from": "node-5",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
+      },
+      {
+        "id": "node-6-rdma",
+        "from": "node-6",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
+      },
+      {
+        "id": "node-7-rdma",
+        "from": "node-7",
+        "to": "remote-pool",
+        "latency_ns": 2500,
+        "bandwidth_bytes_per_ns": 25,
+        "in_flight_bytes": 4194304,
+        "queue_depth_bytes": 33554432,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md RDMA per-port preset",
+          "method": "One-way latency and sustained bandwidth for a 200 Gbps class link; queue depth settings are scenario assumptions.",
+          "date": "2026-10-28",
+          "uncertainty_pct": 40
+        }
+      }
+    ]
+  },
+  "workload": {
+    "type": "synthetic",
+    "profile": "kv_cache_decode",
+    "model": {
+      "name": "generic-gqa-32L",
+      "family": "generic",
+      "layers": 32,
+      "attention_heads": 32,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "dtype_bytes": 2
+    },
+    "requests": {
+      "arrival_rate_per_second": 4,
+      "concurrency": 8,
+      "prompt_tokens": 4096,
+      "generated_tokens": 128,
+      "phase_mix": {
+        "prefill": 0.15,
+        "decode": 0.85
+      }
+    }
+  },
+  "policy": {
+    "name": "frequency_aware",
+    "params": {
+      "k": 2
+    }
+  },
+  "faults": {
+    "node_failures": [],
+    "link_degradations": [],
+    "packet_loss": {
+      "enabled": false,
+      "ppm": 0
+    }
+  },
+  "metrics": {
+    "percentiles": [
+      50,
+      90,
+      99
+    ],
+    "sample_interval_ns": 200000000,
+    "warmup_ns": 1000000000
+  },
+  "output": {
+    "format": "jsonl",
+    "path": "runs/eight-node-rdma-pool",
+    "include_event_log": false
+  }
+}

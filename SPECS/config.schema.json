@@ -555,8 +555,7 @@
             "swap_remote",
             "hot_cold",
             "frequency_aware",
-            "predictive_prefetch",
-            "cost_aware"
+            "predictive_prefetch"
           ]
         },
         "params": {
