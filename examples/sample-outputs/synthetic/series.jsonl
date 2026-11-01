@@ -1,0 +1,5 @@
+{"t_ns":100000000,"accesses":0,"evictions":0,"completed":0,"local_used_pages":{"node-0":0},"pool_used_pages":0,"pools_used_pages":{"remote-pool":0},"link_bytes":{"node-0-cxl":0}}
+{"t_ns":200000000,"accesses":52936,"evictions":576,"completed":2,"local_used_pages":{"node-0":0},"pool_used_pages":0,"pools_used_pages":{"remote-pool":0},"link_bytes":{"node-0-cxl":216530944}}
+{"t_ns":300000000,"accesses":0,"evictions":0,"completed":0,"local_used_pages":{"node-0":0},"pool_used_pages":0,"pools_used_pages":{"remote-pool":0},"link_bytes":{"node-0-cxl":0}}
+{"t_ns":400000000,"accesses":26468,"evictions":256,"completed":1,"local_used_pages":{"node-0":0},"pool_used_pages":0,"pools_used_pages":{"remote-pool":0},"link_bytes":{"node-0-cxl":108134400}}
+{"t_ns":500000000,"accesses":0,"evictions":0,"completed":0,"local_used_pages":{"node-0":0},"pool_used_pages":0,"pools_used_pages":{"remote-pool":0},"link_bytes":{"node-0-cxl":0}}

@@ -1,0 +1,101 @@
+{
+  "assumed_parameters": [
+    {
+      "path": "nodes[0].local_memory",
+      "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+      "uncertainty_pct": null
+    },
+    {
+      "path": "nodes[1].remote_memory",
+      "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+      "uncertainty_pct": 30
+    },
+    {
+      "path": "fabric.links[0]",
+      "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+      "uncertainty_pct": 30
+    }
+  ],
+  "event_count": 5,
+  "events_logged": 15,
+  "host": {
+    "numpy": "1.26.4",
+    "platform": "Linux",
+    "python": "3.12.3"
+  },
+  "limitations": [
+    "Fabric: links, pools, and switches are FIFO byte servers; transfers occupy every hop on their static route plus the destination tier.",
+    "Replay: ops execute in (ts_ns, file order); same-timestamp ops batch by (kind, bytes).",
+    "Observed placement (migrate/prefetch/evict rows, tier hints) is never replayed as directives; the configured policy recomputes all placement.",
+    "Capacity overcommit halts replay with the first offending row (no silent divergence).",
+    "Prefetch (when enabled) follows trailing-integer stride, shares demand fabric, and reports accuracy = touched-after-issue / issued (strictly later timestamps).",
+    "Multi-page reservations place atomically (all local or all on one remote tier).",
+    "Clean evictions transfer 0 bytes; only dirty pages write back.",
+    "Ops with an explicit node run there; ops without one follow their request's round-robin shard. Placement is single-owner N-tier: non-owners read through without moving the page; there is no replication and no coherence protocol."
+  ],
+  "outputs": {
+    "events": "events.jsonl",
+    "scenario": "scenario.json",
+    "series": "series.jsonl",
+    "summary": "summary.json"
+  },
+  "percentile_method": "upper_bucket_edge:growth=1.01",
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "instances": "per compute node (independent state)",
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "rmemfab_version": "0.1.0",
+  "routes": {
+    "node-0>remote-pool": [
+      "node-0-cxl"
+    ],
+    "remote-pool>node-0": [
+      "node-0-cxl"
+    ]
+  },
+  "run_id": "0a304bc81d9a-116cdc0a-s7-swap_remote",
+  "scenario_assumptions": [
+    "Local capacity is intentionally set to 2 GiB to force overflow. A real H100 node has far more DRAM; this scenario exists only to exercise the remote path.",
+    "One compute node and one shared pool keep the event stream small enough to inspect by hand.",
+    "The workload is synthetic KV-cache decode derived from Llama-3-70B geometry, not a captured trace.",
+    "The compute tokens_per_second field is omitted, matching examples/llama-70b-cxl.json. Request duration is therefore driven by modeled memory accesses, not accelerator throughput."
+  ],
+  "scenario_hash": "0a304bc81d9a2a59223e0ad739e78d607495df276b7ce1df5fef639fcf74f36f",
+  "scenario_name": "sample-trace",
+  "schema_version": "0.1",
+  "seed": 7,
+  "shared_pool_model": "shared_byte_server",
+  "status": "completed",
+  "stream_seeds": {
+    "fabric": [
+      6823953754371609207,
+      15549341456297449710
+    ],
+    "faults": [
+      17559002276220262541,
+      3147876876828449332
+    ],
+    "policy": [
+      4042502035264064771,
+      18081263350903326076
+    ],
+    "workload": [
+      3386250816931739734,
+      17579791024057999317
+    ]
+  },
+  "tiers": [
+    "node-0",
+    "remote-pool"
+  ],
+  "trace_hashes": [
+    "116cdc0ae09735ac562f697c2603f0a50b66ffb82486bf770158f34ec324e9b8"
+  ],
+  "virtual_time_ns": 10000000000,
+  "warmup_ns": 0,
+  "warnings": [],
+  "workload_label": "trace"
+}

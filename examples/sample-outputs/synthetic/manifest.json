@@ -1,0 +1,112 @@
+{
+  "assumed_parameters": [
+    {
+      "path": "nodes[0].local_memory",
+      "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+      "uncertainty_pct": null
+    },
+    {
+      "path": "nodes[1].remote_memory",
+      "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+      "uncertainty_pct": 30
+    },
+    {
+      "path": "fabric.links[0]",
+      "source": "docs/HARDWARE-MODELS.md CXL per-port preset",
+      "uncertainty_pct": 30
+    }
+  ],
+  "event_count": 63,
+  "events_logged": 275,
+  "host": {
+    "numpy": "1.26.4",
+    "platform": "Linux",
+    "python": "3.12.3"
+  },
+  "kv_inputs": {
+    "classes": [
+      {
+        "kv_bytes_per_token": 327680,
+        "layers": 80,
+        "name": "dense",
+        "pages_per_request_max": 5440,
+        "window_tokens": null
+      }
+    ],
+    "formula": "2 * layers * kv_heads * head_dim * dtype_bytes",
+    "geometry_source": "legacy_dense"
+  },
+  "limitations": [
+    "Fabric: each compute->pool link is a FIFO byte server and the pool is a shared byte server (aggregate pool service never exceeds pool bandwidth).",
+    "Requests shard round-robin across compute nodes; each node runs an independent policy instance and its own admission queue (concurrency is per node).",
+    "Clean evictions transfer 0 bytes; only dirty pages write back.",
+    "Prefetch (when enabled) anticipates growth, shares demand fabric, and reports accuracy = touched-after-issue / issued; skipped counts cap/pressure refusals.",
+    "In-flight/queue-depth breaches are counted as congestion/overflow telemetry; transfers are never dropped.",
+    "Page lifecycle events use aggregate rows (pages + id prefix), not per-page rows.",
+    "Fetch installs at demand time; page_migrate pairs span the transfer flight.",
+    "Placement is single-owner N-tier: pages migrate between node locals and pools over static shortest-path routes; there is no page sharing or coherence protocol."
+  ],
+  "outputs": {
+    "events": "events.jsonl",
+    "scenario": "scenario.json",
+    "series": "series.jsonl",
+    "summary": "summary.json"
+  },
+  "percentile_method": "upper_bucket_edge:growth=1.01",
+  "policy": {
+    "effective": "swap_remote",
+    "fallback_reason": null,
+    "instances": "per compute node (independent state)",
+    "requested": "swap_remote",
+    "version": "1"
+  },
+  "rmemfab_version": "0.1.0",
+  "routes": {
+    "node-0>remote-pool": [
+      "node-0-cxl"
+    ],
+    "remote-pool>node-0": [
+      "node-0-cxl"
+    ]
+  },
+  "run_id": "5810d9205417-s7-swap_remote",
+  "scenario_assumptions": [
+    "Local capacity is intentionally set to 2 GiB to force overflow. A real H100 node has far more DRAM; this scenario exists only to exercise the remote path.",
+    "One compute node and one shared pool keep the event stream small enough to inspect by hand.",
+    "The workload is synthetic KV-cache decode derived from Llama-3-70B geometry, not a captured trace.",
+    "The compute tokens_per_second field is omitted, matching examples/llama-70b-cxl.json. Request duration is therefore driven by modeled memory accesses, not accelerator throughput."
+  ],
+  "scenario_hash": "5810d92054177767d4e3c651460f03b731485b534b165cee95b9cb7dc3307d51",
+  "scenario_name": "phase1-overflow",
+  "schema_version": "0.1",
+  "seed": 7,
+  "shared_pool_model": "shared_byte_server",
+  "status": "completed",
+  "stream_seeds": {
+    "fabric": [
+      6823953754371609207,
+      15549341456297449710
+    ],
+    "faults": [
+      17559002276220262541,
+      3147876876828449332
+    ],
+    "policy": [
+      4042502035264064771,
+      18081263350903326076
+    ],
+    "workload": [
+      3386250816931739734,
+      17579791024057999317
+    ]
+  },
+  "tiers": [
+    "node-0",
+    "remote-pool"
+  ],
+  "trace_hashes": [],
+  "virtual_time_ns": 500000000,
+  "warmup_ns": 0,
+  "warnings": [],
+  "workload_label": "synthetic"
+}
