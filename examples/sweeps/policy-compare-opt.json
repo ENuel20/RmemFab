@@ -1,0 +1,11 @@
+{
+  "name": "policy-compare-opt",
+  "description": "Phase 3 acceptance: three placement policies on the same OPT-125M replay trace and seed. Sweep, then compare combos/0000 (swap_remote) against combos/0001 (hot_cold): rmemfab compare <out>/combos/0000 <out>/combos/0001",
+  "base": "../phase2-replay-opt.json",
+  "grid": {
+    "policy.name": ["swap_remote", "hot_cold", "frequency_aware"]
+  },
+  "seeds": [7],
+  "workers": 3,
+  "no_events": true
+}

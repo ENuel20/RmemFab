@@ -1,0 +1,13 @@
+{
+  "name": "sensitivity-prefetch",
+  "description": "Sensitivity sweep: stride direction x prefetch degree on the OPT-125M replay trace. The OPT converter emits descending block ids, so stride -1 should show high prefetch accuracy and stride +1 near-zero issue counts; run and read accuracy/useful/wasted from sweep.csv rather than trusting this note.",
+  "base": "../phase2-replay-opt.json",
+  "grid": {
+    "policy.name": ["predictive_prefetch"],
+    "policy.params.stride": [-1, 1],
+    "policy.params.degree": [1, 2]
+  },
+  "seeds": [7],
+  "workers": 4,
+  "no_events": true
+}

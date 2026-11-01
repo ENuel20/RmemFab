@@ -73,47 +73,35 @@ This is the simplest remote-memory policy and the natural foil for smarter ones.
 
 ### Hot/cold migration
 
-Classifies pages by recent access frequency and moves hot pages local and cold pages remote:
+Implemented (`hot_cold`, swap substrate). Classifies pages by lifetime touch count: at least `hot_threshold` touches is hot, at most `cold_threshold` is cold, the rest neutral. Eviction takes cold first, then neutral, then hot (LRU-K order within a band); remote reads install locally unless the page is cold (cold reads bypass, staying remote).
 
-- Maintain an exponentially weighted access counter per page.
-- On a tick or pressure event, promote pages above a hot threshold if local capacity allows.
-- Demote pages below a cold threshold.
-- Avoid migration storms with hysteresis and a minimum residency time.
+Parameters: `k` (default 2), `hot_threshold` (default 3), `cold_threshold` (default 1); requires `0 <= cold_threshold < hot_threshold`.
 
-Parameters: hot/cold thresholds, EWMA decay, tick interval, minimum residency, maximum migrations per tick.
-
-Failure modes to test: thresholds too aggressive cause thrashing; thresholds too conservative leave hot data remote.
+Failure modes to test: thresholds too aggressive cause thrashing; thresholds too conservative leave hot data remote. EWMA decay, tick promotion, and minimum residency are not implemented; bands are recomputed from observation state on every decision, so behavior is a deterministic function of the op stream.
 
 ### Frequency-aware eviction
 
-Protects pages that are likely to be reused even if they were not touched recently:
+Implemented (`frequency_aware`, swap substrate, LRU-K). Victims are ordered by K-th-last-touch, so once-touched streaming pages are evicted before genuinely reused ones even when the streaming touch is more recent. K=1 degenerates to plain LRU.
 
-- Variants: LRU-K, ARC-style adaptive replacement, or a segmented LRU.
-- Tracks access counts in a bounded history.
-- Evicts pages with low estimated reuse probability.
+Parameters: `k` (default 2, must be >= 1).
 
-Parameters: history length, K, segment sizes, adaptation rate.
-
-This policy is useful for KV caches where old pages may become hot again, and for MoE experts with skewed popularity.
+This policy is useful for KV caches where old pages may become hot again, and for MoE experts with skewed popularity. ARC-style adaptive replacement and segmented LRU are future variants, not implemented.
 
 ### Predictive prefetching
 
-Issues prefetches before demand:
+Implemented (`predictive_prefetch`, swap substrate with LRU victims). Replay follows trailing-integer stride: on a touch of page `blk20572` with stride -1, it fetches `blk20571` (then `blk20570` at degree 2) when the successor is allocated but not local. Synthetic runs anticipate per-request KV growth under the same cap. Prefetches share the demand fabric with no priority lane, so aggressive settings visibly congest.
 
-- Detects patterns: sequential strides, per-request KV growth, expert activation sequences.
-- Estimates confidence and only prefetches above a threshold.
-- Cancels or deprioritizes unused prefetches.
-- Accounts for prefetch bandwidth competing with demand traffic.
+Parameters: `degree` (default 1), `stride` (default 1, any nonzero integer; negative strides scan descending ids), `max_in_flight` (default 64), `on_hit` (default true; when false, only remote misses trigger prefetch).
 
-Parameters: confidence threshold, lookahead depth, maximum in-flight prefetches, cancellation policy.
+Accuracy = touched-after-issue / issued, counted only at strictly later timestamps. Never-touched prefetches are reported as wasted bytes, never hidden; cap/pressure refusals count as skipped. Confidence thresholds, cancellation, and expert-sequence prediction are not implemented.
 
 Prefetching can reduce latency or make congestion worse. The comparison engine reports both hit-rate improvement and wasted prefetch traffic.
 
 ### Cost-aware / custom
 
-Weighs latency, bandwidth, migration cost, and a configured cost model. Useful for exploring trade-offs such as "minimize p99 latency" versus "minimize remote traffic" versus "minimize cost per million tokens".
+Not implemented. The cost model (`capacity` + `transfer` + `migration` + `prefetch` + `wasted_prefetch`, all optional rates) already prices policy traffic, but no policy optimizes against it yet.
 
-Custom policies can be registered from an entry point without modifying the core.
+Custom policies register via `register` in `src/rmemfab/policies/` without modifying the engines.
 
 ## Comparison protocol
 
@@ -149,7 +137,7 @@ A policy is considered better only if the improvement exceeds the run-to-run spr
 | Fabric utilization | Busy time or bytes served divided by capacity over the window |
 | Queue depth | Time-weighted in-flight bytes per link |
 | Throughput | Completed requests or tokens per virtual second |
-| Cost | Configured capacity + transfer + migration cost model |
+| Cost | Configured capacity + transfer + migration + prefetch + wasted-prefetch cost model |
 
 All metrics are emitted per run and per time bucket. Comparisons use the same window.
 
@@ -176,9 +164,9 @@ Each sweep point is an independent run with a recorded manifest. The dashboard d
 
 ## Adding a policy
 
-1. Implement the interface in `src/rmemfab/policies/`.
-2. Add a Pydantic parameter model with defaults and bounds.
-3. Register the policy name.
-4. Add unit tests for decisions on small synthetic traces.
+1. Implement the interface in `src/rmemfab/policies/` (`MemoryPolicy` in `base.py`).
+2. Declare `KNOWN_PARAMS` with defaults and validate bounds in `__init__` (raise `ValueError` naming the bad parameter).
+3. Register the policy name with `@register` and add it to `IMPLEMENTED_POLICIES` in `config/scenario.py`.
+4. Add unit tests for decisions on small traces (`tests/test_policies.py`).
 5. Add a comparison scenario under `examples/`.
 6. Document expected behavior, parameters, and failure modes here.
