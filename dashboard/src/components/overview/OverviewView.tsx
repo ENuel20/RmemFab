@@ -42,6 +42,28 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 }) => {
   const [activeChartMetric, setActiveChartMetric] = useState<'latency' | 'bandwidth'>('latency')
 
+  // Dynamic KPIs computed strictly from loaded runs
+  const completedRuns = runs.filter((r) => r.status === 'completed')
+  const validP50s = runs
+    .map((r) => r.metrics?.latency_ns?.p50)
+    .filter((v): v is number => v != null && !isNaN(v))
+  validP50s.sort((a, b) => a - b)
+  const medianP50 = validP50s.length > 0 ? validP50s[Math.floor(validP50s.length / 2)].toFixed(1) : '—'
+
+  const validHitRatios = runs
+    .map((r) => r.metrics?.remote_hit_ratio)
+    .filter((v): v is number => v != null && !isNaN(v))
+  const avgHitRatio = validHitRatios.length > 0
+    ? ((validHitRatios.reduce((s, v) => s + v, 0) / validHitRatios.length) * 100).toFixed(1)
+    : '—'
+
+  const validUtils = runs
+    .map((r) => r.metrics?.fabric_utilization)
+    .filter((v): v is number => v != null && !isNaN(v))
+  const avgUtil = validUtils.length > 0
+    ? ((validUtils.reduce((s, v) => s + v, 0) / validUtils.length) * 100).toFixed(1)
+    : '—'
+
   // Benchmark run for time-series display
   const primaryRun = runs.find((r) => r.id === 'run-llama-cxl-hotcold') || runs[0]
 
@@ -105,34 +127,34 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       <div className="kpi-grid">
         <KpiCard
           title="Completed Runs"
-          value={runs.length}
-          subtitle="Across CXL & RDMA scenarios"
+          value={completedRuns.length}
+          subtitle={`Total loaded: ${runs.length}`}
           unit="runs"
-          trend={{ value: '4 policies active', isPositive: true }}
+          trend={{ value: `${runs.length} runs tracked`, isPositive: true }}
           icon={<Layers size={16} />}
         />
         <KpiCard
           title="Median Access Latency"
-          value="142.4"
+          value={medianP50}
           subtitle="p50 access completion time"
-          unit="ns"
-          trend={{ value: '-38.6% with Hot/Cold', isPositive: true }}
+          unit={medianP50 !== '—' ? 'ns' : ''}
+          trend={{ value: medianP50 !== '—' ? 'Measured median' : 'Awaiting data', isPositive: true }}
           icon={<TrendingDown size={16} />}
         />
         <KpiCard
           title="Remote Memory Hit Ratio"
-          value="78.2"
-          subtitle="1.24 TB / 1.58 TB remote touches"
-          unit="%"
-          trend={{ value: '1.56 TB traffic served', isPositive: true }}
+          value={avgHitRatio}
+          subtitle="Average across runs"
+          unit={avgHitRatio !== '—' ? '%' : ''}
+          trend={{ value: avgHitRatio !== '—' ? 'Across valid runs' : 'Awaiting data', isPositive: true }}
           icon={<Zap size={16} />}
         />
         <KpiCard
           title="Fabric Utilization"
-          value="42.6"
-          subtitle="Peak 76.8 GB/s on 4x CXL links"
-          unit="%"
-          trend={{ value: 'Well within 192 GB/s cap', isPositive: true }}
+          value={avgUtil}
+          subtitle="Average across runs"
+          unit={avgUtil !== '—' ? '%' : ''}
+          trend={{ value: avgUtil !== '—' ? 'Across valid runs' : 'Awaiting data', isPositive: true }}
           icon={<Activity size={16} />}
         />
       </div>
@@ -147,7 +169,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <Activity size={16} color="var(--accent-cyan)" />
                 <span>Virtual-Time Telemetry Dynamics</span>
                 <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>
-                  ({primaryRun?.scenario_name} • seed {primaryRun?.seed})
+                  ({primaryRun?.scenario_name || primaryRun?.id || 'No run'} • seed {primaryRun?.seed ?? '—'})
                 </span>
               </div>
               <div className="card-subtitle">
@@ -174,49 +196,67 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
 
           <div className="chart-container-inner">
-            <ResponsiveContainer width="100%" height="100%">
-              {activeChartMetric === 'latency' ? (
-                <AreaChart data={primaryRun?.time_series || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="p99Grad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
-                    </linearGradient>
-                    <linearGradient id="p50Grad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.5} />
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                  <XAxis dataKey="time_formatted" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                  <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} unit=" ns" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                  <Area type="monotone" dataKey="p99_latency_ns" name="p99 Latency (Tail)" stroke="#f43f5e" fillOpacity={1} fill="url(#p99Grad)" />
-                  <Area type="monotone" dataKey="p95_latency_ns" name="p95 Latency" stroke="#f59e0b" fillOpacity={0} />
-                  <Area type="monotone" dataKey="p50_latency_ns" name="p50 Latency (Median)" stroke="#06b6d4" fillOpacity={1} fill="url(#p50Grad)" />
-                </AreaChart>
+            {activeChartMetric === 'latency' ? (
+              primaryRun?.time_series?.some((p) => p.p50_latency_ns != null || p.p99_latency_ns != null) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={primaryRun?.time_series || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="p99Grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="p50Grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.5} />
+                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                    <XAxis dataKey="time_formatted" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} unit=" ns" />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                    <Area type="monotone" dataKey="p99_latency_ns" name="p99 Latency (Tail)" stroke="#f43f5e" fillOpacity={1} fill="url(#p99Grad)" />
+                    <Area type="monotone" dataKey="p95_latency_ns" name="p95 Latency" stroke="#f59e0b" fillOpacity={0} />
+                    <Area type="monotone" dataKey="p50_latency_ns" name="p50 Latency (Median)" stroke="#06b6d4" fillOpacity={1} fill="url(#p50Grad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
               ) : (
-                <AreaChart data={primaryRun?.time_series || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="bwGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.5} />
-                      <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                  <XAxis dataKey="time_formatted" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                  <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} unit=" GB/s" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                  <Area type="monotone" dataKey="fabric_bandwidth_bytes_per_ns" name="Fabric Bandwidth (GB/s)" stroke="#14b8a6" fillOpacity={1} fill="url(#bwGrad)" />
-                </AreaChart>
-              )}
-            </ResponsiveContainer>
+                <div style={{ height: '100%', minHeight: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)', padding: '24px', textAlign: 'center' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '420px', lineHeight: 1.5 }}>
+                    Per-window latency percentiles are not recorded in engine time series. See summary distribution or inspect run details for overall p50, p95, p99.
+                  </span>
+                </div>
+              )
+            ) : (
+              primaryRun?.time_series?.some((p) => p.fabric_bandwidth_bytes_per_ns != null) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={primaryRun?.time_series || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="bwGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.5} />
+                        <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                    <XAxis dataKey="time_formatted" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} unit=" GB/s" />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                    <Area type="monotone" dataKey="fabric_bandwidth_bytes_per_ns" name="Fabric Bandwidth (GB/s)" stroke="#14b8a6" fillOpacity={1} fill="url(#bwGrad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: '100%', minHeight: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)', padding: '24px', textAlign: 'center' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '420px', lineHeight: 1.5 }}>
+                    Fabric bandwidth time series unavailable for this run.
+                  </span>
+                </div>
+              )
+            )}
           </div>
         </div>
 
@@ -300,7 +340,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <tr key={run.id} style={{ cursor: 'pointer' }} onClick={() => onOpenRunDetails(run)}>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{run.scenario_name}</span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{run.scenario_name || run.id}</span>
                       <span className="mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{run.id}</span>
                     </div>
                   </td>
@@ -310,11 +350,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   <td>
                     <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{run.policy_name}</span>
                   </td>
-                  <td className="mono">{run.seed}</td>
+                  <td className="mono">{run.seed ?? '—'}</td>
                   <td className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>
                     {formatNanoseconds(run.metrics.latency_ns.p50)}
                   </td>
-                  <td className="tabular-nums" style={{ color: run.metrics.latency_ns.p99 > 1000 ? 'var(--accent-rose)' : 'var(--text-secondary)' }}>
+                  <td className="tabular-nums" style={{ color: (run.metrics.latency_ns.p99 ?? 0) > 1000 ? 'var(--accent-rose)' : 'var(--text-secondary)' }}>
                     {formatNanoseconds(run.metrics.latency_ns.p99)}
                   </td>
                   <td className="tabular-nums">
@@ -324,7 +364,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     {formatPercent(run.metrics.fabric_utilization)}
                   </td>
                   <td>
-                    <Badge variant={run.status === 'completed' ? 'emerald' : 'amber'}>
+                    <Badge variant={run.status === 'completed' ? 'emerald' : run.status === 'failed' ? 'rose' : 'amber'}>
                       {run.status}
                     </Badge>
                   </td>

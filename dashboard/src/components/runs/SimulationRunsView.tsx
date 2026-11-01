@@ -49,8 +49,9 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
 
   // Filter runs
   const filteredRuns = runs.filter((run) => {
+    const scenarioName = run.scenario_name || run.id
     const matchesSearch =
-      run.scenario_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      scenarioName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       run.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       run.workload_profile.toLowerCase().includes(searchQuery.toLowerCase())
 
@@ -63,9 +64,9 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
   // Sort runs
   filteredRuns.sort((a, b) => {
     const diff = sortField === 'latency'
-      ? a.metrics.latency_ns.p50 - b.metrics.latency_ns.p50
+      ? (a.metrics.latency_ns.p50 ?? 0) - (b.metrics.latency_ns.p50 ?? 0)
       : sortField === 'scenario'
-      ? a.scenario_name.localeCompare(b.scenario_name)
+      ? (a.scenario_name || a.id).localeCompare(b.scenario_name || b.id)
       : b.id.localeCompare(a.id)
     return sortAsc ? diff : -diff
   })
@@ -234,7 +235,7 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                              {run.scenario_name}
+                              {run.scenario_name || run.id}
                             </span>
                             {(isMockMode || run.id.startsWith('demo-') || run.policy_display_name.startsWith('[Demo]')) && (
                               <Badge variant="amber">Demo</Badge>
@@ -253,9 +254,9 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
                           {run.policy_name}
                         </span>
                       </td>
-                      <td className="mono">{run.seed}</td>
+                      <td className="mono">{run.seed ?? '—'}</td>
                       <td className="tabular-nums">
-                        {(run.duration_ns / 1_000_000_000).toFixed(0)}s
+                        {run.duration_ns != null ? `${(run.duration_ns / 1_000_000_000).toFixed(0)}s` : '—'}
                       </td>
                       <td className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>
                         {formatNanoseconds(run.metrics.latency_ns.p50)}
@@ -263,7 +264,7 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
                       <td
                         className="tabular-nums"
                         style={{
-                          color: run.metrics.latency_ns.p99 > 1000 ? 'var(--accent-rose)' : 'var(--text-secondary)'
+                          color: (run.metrics.latency_ns.p99 ?? 0) > 1000 ? 'var(--accent-rose)' : 'var(--text-secondary)'
                         }}
                       >
                         {formatNanoseconds(run.metrics.latency_ns.p99)}
@@ -275,7 +276,7 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
                         {formatPercent(run.metrics.fabric_utilization)}
                       </td>
                       <td>
-                        <Badge variant={run.status === 'completed' ? 'emerald' : 'amber'}>
+                        <Badge variant={run.status === 'completed' ? 'emerald' : run.status === 'failed' ? 'rose' : 'amber'}>
                           {run.status}
                         </Badge>
                       </td>
@@ -327,7 +328,7 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
 }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Demo Warning Pill */}
+      {/* Provenance Banner */}
       <div
         style={{
           display: 'flex',
@@ -335,17 +336,33 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
           justifyContent: 'space-between',
           padding: '10px 14px',
           borderRadius: 'var(--radius-md)',
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          border: '1px solid rgba(245, 158, 11, 0.3)'
+          backgroundColor: run.is_demo ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+          border: run.is_demo ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)'
         }}
       >
-        <span style={{ fontSize: '12px', color: 'var(--accent-amber)', fontWeight: 600 }}>
-          DEMO TELEMETRY - Generated from discrete-event simulation model
+        <span style={{ fontSize: '12px', color: run.is_demo ? 'var(--accent-amber)' : 'var(--accent-emerald)', fontWeight: 600 }}>
+          {run.is_demo ? 'DEMO TELEMETRY - Illustrative dataset' : 'LIVE TELEMETRY - Discrete-event simulation run'}
         </span>
         <span className="mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-          {run.scenario_hash}
+          {run.scenario_hash ? `Hash: ${run.scenario_hash.slice(0, 12)}` : '—'}
         </span>
       </div>
+
+      {/* Failure alert if run failed */}
+      {run.status === 'failed' && (
+        <div
+          style={{
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'rgba(244, 63, 94, 0.1)',
+            border: '1px solid rgba(244, 63, 94, 0.3)'
+          }}
+        >
+          <span style={{ fontSize: '12px', color: 'var(--accent-rose)', fontWeight: 600 }}>
+            RUN FAILED: {run.error || run.bottleneck?.explanation || 'Simulation execution failed'}
+          </span>
+        </div>
+      )}
 
       {/* KPI Overview Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
@@ -395,17 +412,25 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
         <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', display: 'block' }}>
           Latency Percentiles Over Virtual Time (ns)
         </span>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={run.time_series} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-            <XAxis dataKey="time_formatted" stroke="var(--text-muted)" fontSize={11} />
-            <YAxis stroke="var(--text-muted)" fontSize={11} unit=" ns" />
-            <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }} />
-            <Legend wrapperStyle={{ fontSize: '11px' }} />
-            <Area type="monotone" dataKey="p99_latency_ns" name="p99 Latency" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.1} />
-            <Area type="monotone" dataKey="p50_latency_ns" name="p50 Latency" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.2} />
-          </AreaChart>
-        </ResponsiveContainer>
+        {run.time_series.some((p) => p.p50_latency_ns != null || p.p99_latency_ns != null) ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={run.time_series} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+              <XAxis dataKey="time_formatted" stroke="var(--text-muted)" fontSize={11} />
+              <YAxis stroke="var(--text-muted)" fontSize={11} unit=" ns" />
+              <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }} />
+              <Legend wrapperStyle={{ fontSize: '11px' }} />
+              <Area type="monotone" dataKey="p99_latency_ns" name="p99 Latency" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.1} />
+              <Area type="monotone" dataKey="p50_latency_ns" name="p50 Latency" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div style={{ height: 'calc(100% - 24px)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)', padding: '16px', textAlign: 'center' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Per-window latency percentiles are not recorded in engine time series. See summary distribution above for full-run p50, p95, p99.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Memory Occupancy Chart */}
@@ -413,50 +438,73 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
         <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', display: 'block' }}>
           Memory Occupancy Distribution by Tier (Local DRAM vs Remote Fabric)
         </span>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={run.time_series} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-            <XAxis dataKey="time_formatted" stroke="var(--text-muted)" fontSize={11} />
-            <YAxis
-              stroke="var(--text-muted)"
-              fontSize={11}
-              tickFormatter={(val) => `${(val / (1024 ** 3)).toFixed(0)} GB`}
-            />
-            <Tooltip
-              formatter={(val: unknown) => [formatBytes(Number(val) || 0), 'Occupancy']}
-              contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }}
-            />
-            <Legend wrapperStyle={{ fontSize: '11px' }} />
-            <Area type="monotone" dataKey="local_occupancy_bytes" name="Local DRAM Occupancy" stackId="1" stroke="#0ea5e9" fill="#0ea5e9" fillOpacity={0.4} />
-            <Area type="monotone" dataKey="remote_occupancy_bytes" name="Remote Fabric Occupancy" stackId="1" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.4} />
-          </AreaChart>
-        </ResponsiveContainer>
+        {run.time_series.some((p) => p.local_occupancy_bytes != null || p.remote_occupancy_bytes != null) ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={run.time_series} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+              <XAxis dataKey="time_formatted" stroke="var(--text-muted)" fontSize={11} />
+              <YAxis
+                stroke="var(--text-muted)"
+                fontSize={11}
+                tickFormatter={(val) => `${(val / (1024 ** 3)).toFixed(0)} GB`}
+              />
+              <Tooltip
+                formatter={(val: unknown) => [formatBytes(Number(val) || 0), 'Occupancy']}
+                contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }}
+              />
+              <Legend wrapperStyle={{ fontSize: '11px' }} />
+              <Area type="monotone" dataKey="local_occupancy_bytes" name="Local DRAM Occupancy" stackId="1" stroke="#0ea5e9" fill="#0ea5e9" fillOpacity={0.4} />
+              <Area type="monotone" dataKey="remote_occupancy_bytes" name="Remote Fabric Occupancy" stackId="1" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.4} />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div style={{ height: 'calc(100% - 24px)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)', padding: '16px', textAlign: 'center' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Tier occupancy distribution unavailable in time series.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Bottleneck Diagnostic Card */}
-      <div
-        style={{
-          padding: '16px',
-          borderRadius: 'var(--radius-md)',
-          backgroundColor: 'var(--bg-card-secondary)',
-          border: '1px solid var(--border-card)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-          <Badge variant={run.bottleneck.severity === 'high' || run.bottleneck.severity === 'critical' ? 'rose' : 'cyan'}>
-            BOTTLENECK: {run.bottleneck.primary_bottleneck}
-          </Badge>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            Severity: {run.bottleneck.severity.toUpperCase()}
-          </span>
+      {run.bottleneck ? (
+        <div
+          style={{
+            padding: '16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--bg-card-secondary)',
+            border: '1px solid var(--border-card)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+            <Badge variant={run.bottleneck.severity === 'high' || run.bottleneck.severity === 'critical' ? 'rose' : 'cyan'}>
+              BOTTLENECK: {run.bottleneck.primary_bottleneck}
+            </Badge>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Severity: {run.bottleneck.severity.toUpperCase()}
+            </span>
+          </div>
+          <p style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px', lineHeight: 1.5 }}>
+            {run.bottleneck.explanation}
+          </p>
+          <div style={{ fontSize: '12px', color: 'var(--accent-cyan)', background: 'var(--bg-input)', padding: '8px 12px', borderRadius: 'var(--radius-sm)' }}>
+            <strong>Suggested Policy Tuning:</strong> {run.bottleneck.suggested_policy_tuning}
+          </div>
         </div>
-        <p style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px', lineHeight: 1.5 }}>
-          {run.bottleneck.explanation}
-        </p>
-        <div style={{ fontSize: '12px', color: 'var(--accent-cyan)', background: 'var(--bg-input)', padding: '8px 12px', borderRadius: 'var(--radius-sm)' }}>
-          <strong>Suggested Policy Tuning:</strong> {run.bottleneck.suggested_policy_tuning}
+      ) : (
+        <div
+          style={{
+            padding: '14px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--bg-card-secondary)',
+            border: '1px solid var(--border-card)',
+            color: 'var(--text-muted)',
+            fontSize: '12px'
+          }}
+        >
+          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Diagnostic Analysis:</span> Factual telemetry counters recorded. Heuristic bottleneck diagnosis is not asserted by the discrete-event simulator for this run.
         </div>
-      </div>
+      )}
 
       {/* Action Footer in Inspector */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

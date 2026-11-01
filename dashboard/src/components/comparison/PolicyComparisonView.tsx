@@ -11,6 +11,13 @@ import {
   type FairnessCheckItem
 } from '../../utils/comparisonGuard'
 import {
+  prepareComparisonChartData,
+  getTailLatencyColor,
+  getFabricUtilColor,
+  getMedianLatencyColor,
+  getLocalHitRatioColor
+} from '../../utils/comparisonMetrics'
+import {
   GitCompare,
   AlertTriangle,
   CheckCircle2,
@@ -51,27 +58,8 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
   // Run the strict comparison eligibility guard
   const guardResult = evaluateComparisonEligibility(selectedRuns)
 
-  // Comparative chart data (only calculated when eligible)
-  const latencyData = selectedRuns.map((r) => ({
-    name: r.policy_name,
-    p50: r.metrics.latency_ns.p50,
-    p95: r.metrics.latency_ns.p95,
-    p99: r.metrics.latency_ns.p99
-  }))
-
-  const hitRatioData = selectedRuns.map((r) => ({
-    name: r.policy_name,
-    localHitPct: parseFloat((r.metrics.local_hit_ratio * 100).toFixed(1)),
-    remoteHitPct: parseFloat((r.metrics.remote_hit_ratio * 100).toFixed(1)),
-    missPct: parseFloat((r.metrics.miss_ratio * 100).toFixed(1))
-  }))
-
-  const trafficData = selectedRuns.map((r) => ({
-    name: r.policy_name,
-    remoteTrafficGb: parseFloat((r.metrics.remote_traffic_bytes / (1024 ** 3)).toFixed(1)),
-    migrationGb: parseFloat((r.metrics.migration_bytes / (1024 ** 3)).toFixed(1)),
-    fabricUtilPct: parseFloat((r.metrics.fabric_utilization * 100).toFixed(1))
-  }))
+  // Comparative chart data (only calculated when eligible, preserving nulls)
+  const { latencyData, hitRatioData, trafficData } = prepareComparisonChartData(selectedRuns)
 
   return (
     <div className="app-content">
@@ -98,7 +86,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                   style={{ fontSize: '11px', padding: '4px 10px' }}
                   onClick={() => onToggleRunSelection(r.id)}
                 >
-                  {r.policy_name} ({r.scenario_name.split('-')[0]})
+                  {r.policy_name} ({r.scenario_name ? r.scenario_name.split('-')[0] : r.id})
                 </button>
               )
             })}
@@ -373,7 +361,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                     <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} />
                     <YAxis stroke="var(--text-muted)" fontSize={11} unit=" ns" />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }} />
+                    <Tooltip formatter={(val: unknown) => [val != null ? `${val} ns` : '—', undefined]} contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }} />
                     <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
                     <Bar dataKey="p50" name="p50 (Median)" fill="#06b6d4" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="p95" name="p95" fill="#f59e0b" radius={[4, 4, 0, 0]} />
@@ -401,7 +389,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                     <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} />
                     <YAxis stroke="var(--text-muted)" fontSize={11} unit="%" />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }} />
+                    <Tooltip formatter={(val: unknown) => [val != null ? `${val}%` : '—', undefined]} contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }} />
                     <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
                     <Bar dataKey="localHitPct" name="Local Hit %" stackId="a" fill="#0ea5e9" />
                     <Bar dataKey="remoteHitPct" name="Remote Hit %" stackId="a" fill="#8b5cf6" />
@@ -429,7 +417,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                     <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} />
                     <YAxis stroke="var(--text-muted)" fontSize={11} unit=" GiB" />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }} />
+                    <Tooltip formatter={(val: unknown, name: unknown) => [val != null ? `${val}${String(name || '').includes('Util') ? '%' : ' GiB'}` : '—', undefined]} contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }} />
                     <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
                     <Bar dataKey="remoteTrafficGb" name="Remote Traffic (GiB)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="migrationGb" name="Proactive Migration (GiB)" fill="#06b6d4" radius={[4, 4, 0, 0]} />
@@ -474,7 +462,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <td style={{ fontWeight: 600 }}>Median Latency (p50)</td>
                     <td><Badge variant="cyan">&darr; Lower is better</Badge></td>
                     {selectedRuns.map((r) => (
-                      <td key={r.id} className="tabular-nums" style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                      <td key={r.id} className="tabular-nums" style={{ fontWeight: 700, color: getMedianLatencyColor(r.metrics.latency_ns.p50) }}>
                         {formatNanoseconds(r.metrics.latency_ns.p50)}
                       </td>
                     ))}
@@ -484,7 +472,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <td style={{ fontWeight: 600 }}>Tail Latency (p99)</td>
                     <td><Badge variant="cyan">&darr; Lower is better</Badge></td>
                     {selectedRuns.map((r) => (
-                      <td key={r.id} className="tabular-nums" style={{ color: r.metrics.latency_ns.p99 > 500 ? 'var(--accent-rose)' : 'var(--text-primary)' }}>
+                      <td key={r.id} className="tabular-nums" style={{ color: getTailLatencyColor(r.metrics.latency_ns.p99) }}>
                         {formatNanoseconds(r.metrics.latency_ns.p99)}
                       </td>
                     ))}
@@ -494,7 +482,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <td style={{ fontWeight: 600 }}>Stall Time</td>
                     <td><Badge variant="cyan">&darr; Lower is better</Badge></td>
                     {selectedRuns.map((r) => (
-                      <td key={r.id} className="tabular-nums">
+                      <td key={r.id} className="tabular-nums" style={{ color: r.metrics.stall_time_ns != null ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                         {formatNanoseconds(r.metrics.stall_time_ns)}
                       </td>
                     ))}
@@ -504,7 +492,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <td style={{ fontWeight: 600 }}>Local Hit Ratio</td>
                     <td><Badge variant="emerald">&uarr; Higher is better</Badge></td>
                     {selectedRuns.map((r) => (
-                      <td key={r.id} className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-teal)' }}>
+                      <td key={r.id} className="tabular-nums" style={{ fontWeight: 600, color: getLocalHitRatioColor(r.metrics.local_hit_ratio) }}>
                         {formatPercent(r.metrics.local_hit_ratio)}
                       </td>
                     ))}
@@ -514,7 +502,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <td style={{ fontWeight: 600 }}>Remote Hit Ratio</td>
                     <td><Badge variant="blue">Workload dependent</Badge></td>
                     {selectedRuns.map((r) => (
-                      <td key={r.id} className="tabular-nums">
+                      <td key={r.id} className="tabular-nums" style={{ color: r.metrics.remote_hit_ratio != null ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                         {formatPercent(r.metrics.remote_hit_ratio)}
                       </td>
                     ))}
@@ -524,7 +512,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <td style={{ fontWeight: 600 }}>Remote Traffic Volume</td>
                     <td><Badge variant="cyan">&darr; Lower is better</Badge></td>
                     {selectedRuns.map((r) => (
-                      <td key={r.id} className="tabular-nums">
+                      <td key={r.id} className="tabular-nums" style={{ color: r.metrics.remote_traffic_bytes != null ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                         {formatBytes(r.metrics.remote_traffic_bytes)}
                       </td>
                     ))}
@@ -534,7 +522,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <td style={{ fontWeight: 600 }}>Proactive Migration Volume</td>
                     <td><Badge variant="blue">Trade-off metric</Badge></td>
                     {selectedRuns.map((r) => (
-                      <td key={r.id} className="tabular-nums">
+                      <td key={r.id} className="tabular-nums" style={{ color: r.metrics.migration_bytes != null ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                         {formatBytes(r.metrics.migration_bytes)}
                       </td>
                     ))}
@@ -544,7 +532,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <td style={{ fontWeight: 600 }}>Fabric Utilization</td>
                     <td><Badge variant="amber">&darr; Moderate is better (&lt;70%)</Badge></td>
                     {selectedRuns.map((r) => (
-                      <td key={r.id} className="tabular-nums" style={{ color: r.metrics.fabric_utilization > 0.7 ? 'var(--accent-rose)' : 'var(--text-primary)' }}>
+                      <td key={r.id} className="tabular-nums" style={{ color: getFabricUtilColor(r.metrics.fabric_utilization) }}>
                         {formatPercent(r.metrics.fabric_utilization)}
                       </td>
                     ))}
@@ -554,8 +542,8 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                     <td style={{ fontWeight: 600 }}>Identified Bottleneck</td>
                     <td>-</td>
                     {selectedRuns.map((r) => (
-                      <td key={r.id} style={{ fontSize: '12px', maxWidth: '240px' }}>
-                        {r.bottleneck.primary_bottleneck}
+                      <td key={r.id} style={{ fontSize: '12px', maxWidth: '240px', color: r.bottleneck?.primary_bottleneck ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                        {r.bottleneck?.primary_bottleneck || 'Unavailable'}
                       </td>
                     ))}
                   </tr>

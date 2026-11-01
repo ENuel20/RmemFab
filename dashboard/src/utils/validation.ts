@@ -14,6 +14,7 @@ const ALLOWED_ROOT_PROPERTIES = new Set([
   'version',
   'name',
   'description',
+  'assumptions',
   'seed',
   'duration_ns',
   'warmup_ns',
@@ -27,6 +28,38 @@ const ALLOWED_ROOT_PROPERTIES = new Set([
   'output',
   'cost_model'
 ])
+
+function validateProvenance(p: unknown, path: string, errors: ValidationError[]): void {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) {
+    errors.push({ field: path, message: 'Provenance must be an object' })
+    return
+  }
+  const obj = p as Record<string, unknown>
+  const allowed = new Set(['kind', 'source', 'method', 'date', 'uncertainty_pct', 'notes'])
+  Object.keys(obj).forEach((k) => {
+    if (!allowed.has(k)) {
+      errors.push({ field: `${path}.${k}`, message: `Unexpected property "${k}" in provenance` })
+    }
+  })
+  if (typeof obj.kind !== 'string' || !['measured', 'sourced', 'assumed'].includes(obj.kind)) {
+    errors.push({ field: `${path}.kind`, message: 'Provenance kind is required and must be "measured", "sourced", or "assumed"' })
+  }
+  if (obj.source !== undefined && (typeof obj.source !== 'string' || obj.source.length < 1 || obj.source.length > 500)) {
+    errors.push({ field: `${path}.source`, message: 'Provenance source must be a string (1-500 chars)' })
+  }
+  if (obj.method !== undefined && (typeof obj.method !== 'string' || obj.method.length > 1000)) {
+    errors.push({ field: `${path}.method`, message: 'Provenance method must be a string (up to 1000 chars)' })
+  }
+  if (obj.date !== undefined && (typeof obj.date !== 'string' || obj.date.length > 32)) {
+    errors.push({ field: `${path}.date`, message: 'Provenance date must be a string (up to 32 chars)' })
+  }
+  if (obj.uncertainty_pct !== undefined && (typeof obj.uncertainty_pct !== 'number' || obj.uncertainty_pct < 0)) {
+    errors.push({ field: `${path}.uncertainty_pct`, message: 'Provenance uncertainty_pct must be a number >= 0' })
+  }
+  if (obj.notes !== undefined && (typeof obj.notes !== 'string' || obj.notes.length > 1000)) {
+    errors.push({ field: `${path}.notes`, message: 'Provenance notes must be a string (up to 1000 chars)' })
+  }
+}
 
 const VALID_WORKLOAD_PROFILES = [
   'kv_cache_decode',
@@ -82,6 +115,22 @@ export function validateScenario(scenario: unknown): { isValid: boolean; errors:
       errors.push({ field: 'description', message: 'Description must be a string' })
     } else if (s.description.length > 4000) {
       errors.push({ field: 'description', message: 'Description cannot exceed 4000 characters' })
+    }
+  }
+
+  // 4b. Assumptions (optional)
+  if (s.assumptions !== undefined) {
+    if (!Array.isArray(s.assumptions)) {
+      errors.push({ field: 'assumptions', message: 'Assumptions must be an array of strings' })
+    } else {
+      if (s.assumptions.length > 50) {
+        errors.push({ field: 'assumptions', message: 'Assumptions cannot exceed 50 entries' })
+      }
+      s.assumptions.forEach((item, idx) => {
+        if (typeof item !== 'string' || item.length < 1 || item.length > 4000) {
+          errors.push({ field: `assumptions[${idx}]`, message: 'Each assumption must be a non-empty string up to 4000 characters' })
+        }
+      })
     }
   }
 
@@ -195,13 +244,18 @@ export function validateScenario(scenario: unknown): { isValid: boolean; errors:
           'page_size_bytes',
           'read_latency_factor',
           'write_latency_factor',
-          'cost_per_byte_second'
+          'cost_per_byte_second',
+          'provenance'
         ])
         Object.keys(m).forEach((k) => {
           if (!allowedTierKeys.has(k)) {
             errors.push({ field: `${tierPath}.${k}`, message: `Unexpected property "${k}" in memory tier` })
           }
         })
+
+        if (m.provenance) {
+          validateProvenance(m.provenance, `${tierPath}.provenance`, errors)
+        }
 
         if (typeof m.capacity_bytes !== 'number' || !Number.isInteger(m.capacity_bytes) || m.capacity_bytes < 1) {
           errors.push({ field: `${tierPath}.capacity_bytes`, message: 'Memory capacity must be an integer >= 1' })
@@ -235,6 +289,21 @@ export function validateScenario(scenario: unknown): { isValid: boolean; errors:
           errors.push({ field: `${path}.compute`, message: 'Compute configuration must be an object' })
         } else {
           const comp = node.compute as Record<string, unknown>
+          const allowedComputeKeys = new Set([
+            'accelerator',
+            'accelerators',
+            'accelerator_memory_bytes',
+            'tokens_per_second',
+            'provenance'
+          ])
+          Object.keys(comp).forEach((k) => {
+            if (!allowedComputeKeys.has(k)) {
+              errors.push({ field: `${path}.compute.${k}`, message: `Unexpected property "${k}" in compute` })
+            }
+          })
+          if (comp.provenance) {
+            validateProvenance(comp.provenance, `${path}.compute.provenance`, errors)
+          }
           if (comp.accelerators !== undefined && (typeof comp.accelerators !== 'number' || !Number.isInteger(comp.accelerators) || comp.accelerators < 1)) {
             errors.push({ field: `${path}.compute.accelerators`, message: 'Accelerators count must be an integer >= 1' })
           }
@@ -255,6 +324,82 @@ export function validateScenario(scenario: unknown): { isValid: boolean; errors:
     errors.push({ field: 'fabric', message: 'Fabric object is required with a links array' })
   } else {
     const fab = s.fabric as Record<string, unknown>
+    const allowedFabricKeys = new Set(['links', 'switch', 'switches'])
+    Object.keys(fab).forEach((k) => {
+      if (!allowedFabricKeys.has(k)) {
+        errors.push({ field: `fabric.${k}`, message: `Unexpected property "${k}" in fabric` })
+      }
+    })
+
+    if (fab.switch !== undefined && fab.switches !== undefined) {
+      errors.push({
+        field: 'fabric',
+        message: 'Cannot specify both "fabric.switch" and "fabric.switches" in fabric configuration'
+      })
+    }
+
+    if (fab.switch !== undefined) {
+      if (typeof fab.switch !== 'object' || fab.switch === null || Array.isArray(fab.switch)) {
+        errors.push({ field: 'fabric.switch', message: 'Fabric switch must be an object' })
+      } else {
+        const sw = fab.switch as Record<string, unknown>
+        const allowedSwitchKeys = new Set(['bandwidth_bytes_per_ns', 'latency_ns', 'provenance'])
+        Object.keys(sw).forEach((k) => {
+          if (!allowedSwitchKeys.has(k)) {
+            errors.push({ field: `fabric.switch.${k}`, message: `Unexpected property "${k}" in fabric.switch` })
+          }
+        })
+        if (typeof sw.bandwidth_bytes_per_ns !== 'number' || sw.bandwidth_bytes_per_ns <= 0) {
+          errors.push({ field: 'fabric.switch.bandwidth_bytes_per_ns', message: 'Switch bandwidth_bytes_per_ns must be > 0' })
+        }
+        if (sw.latency_ns !== undefined && (typeof sw.latency_ns !== 'number' || sw.latency_ns < 0)) {
+          errors.push({ field: 'fabric.switch.latency_ns', message: 'Switch latency_ns must be >= 0' })
+        }
+        if (sw.provenance) {
+          validateProvenance(sw.provenance, 'fabric.switch.provenance', errors)
+        }
+      }
+    }
+
+    if (fab.switches !== undefined) {
+      if (!Array.isArray(fab.switches)) {
+        errors.push({ field: 'fabric.switches', message: 'Fabric switches must be an array' })
+      } else {
+        const switchIds = new Set<string>()
+        fab.switches.forEach((swItem, idx) => {
+          const swPath = `fabric.switches[${idx}]`
+          if (typeof swItem !== 'object' || swItem === null || Array.isArray(swItem)) {
+            errors.push({ field: swPath, message: 'Each switch in fabric.switches must be an object' })
+            return
+          }
+          const sw = swItem as Record<string, unknown>
+          const allowedNamedSwitchKeys = new Set(['id', 'bandwidth_bytes_per_ns', 'latency_ns', 'provenance'])
+          Object.keys(sw).forEach((k) => {
+            if (!allowedNamedSwitchKeys.has(k)) {
+              errors.push({ field: `${swPath}.${k}`, message: `Unexpected property "${k}" in named switch` })
+            }
+          })
+          if (typeof sw.id !== 'string' || !ID_REGEX.test(sw.id) || sw.id.length > 64) {
+            errors.push({ field: `${swPath}.id`, message: 'Switch id must match ^[A-Za-z0-9][A-Za-z0-9._-]*$ (1-64 characters)' })
+          } else {
+            if (switchIds.has(sw.id)) {
+              errors.push({ field: `${swPath}.id`, message: `Duplicate switch id "${sw.id}"` })
+            }
+            switchIds.add(sw.id)
+          }
+          if (typeof sw.bandwidth_bytes_per_ns !== 'number' || sw.bandwidth_bytes_per_ns <= 0) {
+            errors.push({ field: `${swPath}.bandwidth_bytes_per_ns`, message: 'Switch bandwidth_bytes_per_ns must be > 0' })
+          }
+          if (sw.latency_ns !== undefined && (typeof sw.latency_ns !== 'number' || sw.latency_ns < 0)) {
+            errors.push({ field: `${swPath}.latency_ns`, message: 'Switch latency_ns must be >= 0' })
+          }
+          if (sw.provenance) {
+            validateProvenance(sw.provenance, `${swPath}.provenance`, errors)
+          }
+        })
+      }
+    }
+
     if (!Array.isArray(fab.links) || fab.links.length === 0) {
       errors.push({ field: 'fabric.links', message: 'At least one fabric link is required in "fabric.links"' })
     } else {
@@ -275,13 +420,18 @@ export function validateScenario(scenario: unknown): { isValid: boolean; errors:
           'in_flight_bytes',
           'queue_depth_bytes',
           'bidirectional',
-          'loss_ppm'
+          'loss_ppm',
+          'provenance'
         ])
         Object.keys(link).forEach((k) => {
           if (!allowedLinkKeys.has(k)) {
             errors.push({ field: `${path}.${k}`, message: `Unexpected property "${k}" in link` })
           }
         })
+
+        if (link.provenance) {
+          validateProvenance(link.provenance, `${path}.provenance`, errors)
+        }
 
         // Link ID
         if (typeof link.id !== 'string' || link.id.length === 0) {
@@ -537,6 +687,29 @@ export function validateScenario(scenario: unknown): { isValid: boolean; errors:
           }
         }
       }
+
+      if (f.node_failure_process !== undefined) {
+        if (typeof f.node_failure_process !== 'object' || Array.isArray(f.node_failure_process)) {
+          errors.push({ field: 'faults.node_failure_process', message: 'node_failure_process must be an object' })
+        } else {
+          const nfp = f.node_failure_process as Record<string, unknown>
+          if (nfp.enabled !== undefined && typeof nfp.enabled !== 'boolean') {
+            errors.push({ field: 'faults.node_failure_process.enabled', message: 'node_failure_process.enabled must be a boolean' })
+          }
+          if (nfp.mtbf_ns !== undefined && (typeof nfp.mtbf_ns !== 'number' || !Number.isInteger(nfp.mtbf_ns) || nfp.mtbf_ns < 1)) {
+            errors.push({ field: 'faults.node_failure_process.mtbf_ns', message: 'mtbf_ns must be an integer >= 1' })
+          }
+          if (nfp.repair_ns !== undefined && (typeof nfp.repair_ns !== 'number' || !Number.isInteger(nfp.repair_ns) || nfp.repair_ns < 0)) {
+            errors.push({ field: 'faults.node_failure_process.repair_ns', message: 'repair_ns must be an integer >= 0' })
+          }
+          if (nfp.distribution !== undefined && !['exponential', 'weibull'].includes(nfp.distribution as string)) {
+            errors.push({ field: 'faults.node_failure_process.distribution', message: 'distribution must be "exponential" or "weibull"' })
+          }
+          if (nfp.shape !== undefined && (typeof nfp.shape !== 'number' || nfp.shape <= 0)) {
+            errors.push({ field: 'faults.node_failure_process.shape', message: 'shape must be a number > 0' })
+          }
+        }
+      }
     }
   }
 
@@ -600,6 +773,15 @@ export function validateScenario(scenario: unknown): { isValid: boolean; errors:
       }
       if (cm.migration_per_gib !== undefined && (typeof cm.migration_per_gib !== 'number' || cm.migration_per_gib < 0)) {
         errors.push({ field: 'cost_model.migration_per_gib', message: 'Cost migration_per_gib must be >= 0' })
+      }
+      if (cm.prefetch_per_gib !== undefined && (typeof cm.prefetch_per_gib !== 'number' || cm.prefetch_per_gib < 0)) {
+        errors.push({ field: 'cost_model.prefetch_per_gib', message: 'Cost prefetch_per_gib must be >= 0' })
+      }
+      if (cm.wasted_prefetch_per_gib !== undefined && (typeof cm.wasted_prefetch_per_gib !== 'number' || cm.wasted_prefetch_per_gib < 0)) {
+        errors.push({ field: 'cost_model.wasted_prefetch_per_gib', message: 'Cost wasted_prefetch_per_gib must be >= 0' })
+      }
+      if (cm.currency !== undefined && (typeof cm.currency !== 'string' || cm.currency.length === 0)) {
+        errors.push({ field: 'cost_model.currency', message: 'Cost currency must be a non-empty string' })
       }
     }
   }

@@ -136,9 +136,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               ) : (
                 <AlertCircle size={16} color="var(--accent-amber)" />
               )}
-              <div style={{ fontSize: '12px' }}>
-                <strong>Status: </strong>
-                <span>{apiStatus.message}</span>
+              <div style={{ fontSize: '12px', flex: 1 }}>
+                <div>
+                  <strong>Status: </strong>
+                  <span>{apiStatus.message}</span>
+                </div>
+                {apiStatus.connected && (
+                  <div style={{ marginTop: '8px', display: 'flex', gap: '16px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    <span><strong>Engine:</strong> v{apiStatus.rmemfab_version || apiStatus.version || '0.1.0'}</span>
+                    <span><strong>Trace Replay:</strong> {apiStatus.replay_supported ? 'Enabled' : 'Disabled'}</span>
+                    <span><strong>Faults:</strong> {apiStatus.faults_supported ? 'Enabled' : 'Unsupported'}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}

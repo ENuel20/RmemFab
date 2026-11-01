@@ -18,6 +18,17 @@ export type PolicyName =
   | 'predictive_prefetch'
   | 'cost_aware'
 
+export type ProvenanceKind = 'measured' | 'sourced' | 'assumed'
+
+export interface ProvenanceConfig {
+  kind: ProvenanceKind
+  source?: string
+  method?: string
+  date?: string
+  uncertainty_pct?: number
+  notes?: string
+}
+
 export interface MemoryTierConfig {
   capacity_bytes: number
   latency_ns: number
@@ -26,6 +37,7 @@ export interface MemoryTierConfig {
   read_latency_factor?: number
   write_latency_factor?: number
   cost_per_byte_second?: number
+  provenance?: ProvenanceConfig
 }
 
 export interface ComputeConfig {
@@ -33,6 +45,7 @@ export interface ComputeConfig {
   accelerators?: number
   accelerator_memory_bytes?: number
   tokens_per_second?: number
+  provenance?: ProvenanceConfig
 }
 
 export interface NodeConfig {
@@ -54,6 +67,20 @@ export interface FabricLinkConfig {
   queue_depth_bytes?: number
   bidirectional?: boolean
   loss_ppm?: number
+  provenance?: ProvenanceConfig
+}
+
+export interface SwitchConfig {
+  bandwidth_bytes_per_ns: number
+  latency_ns?: number
+  provenance?: ProvenanceConfig
+}
+
+export interface NamedSwitchConfig {
+  id: string
+  bandwidth_bytes_per_ns: number
+  latency_ns?: number
+  provenance?: ProvenanceConfig
 }
 
 export interface ModelConfig {
@@ -137,8 +164,17 @@ export interface PacketLossConfig {
   ppm?: number
 }
 
+export interface FailureProcessConfig {
+  enabled?: boolean
+  mtbf_ns?: number
+  repair_ns?: number
+  distribution?: 'exponential' | 'weibull'
+  shape?: number
+}
+
 export interface FaultsConfig {
   node_failures?: NodeFailureConfig[]
+  node_failure_process?: FailureProcessConfig
   link_degradations?: LinkDegradationConfig[]
   packet_loss?: PacketLossConfig
 }
@@ -154,6 +190,8 @@ export interface CostModelConfig {
   capacity_per_gib_second?: number
   transfer_per_gib?: number
   migration_per_gib?: number
+  prefetch_per_gib?: number
+  wasted_prefetch_per_gib?: number
   currency?: string
 }
 
@@ -168,6 +206,7 @@ export interface ScenarioConfig {
   version: '0.1'
   name: string
   description?: string
+  assumptions?: string[]
   seed: number
   duration_ns: number
   warmup_ns?: number
@@ -175,6 +214,8 @@ export interface ScenarioConfig {
   nodes: NodeConfig[]
   fabric: {
     links: FabricLinkConfig[]
+    switch?: SwitchConfig
+    switches?: NamedSwitchConfig[]
   }
   workload: WorkloadConfig
   policy: PolicyConfig

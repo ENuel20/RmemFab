@@ -7,7 +7,7 @@ import type {
   FabricLinkConfig
 } from '../../types/scenario'
 import { LLAMA_70B_CXL_SCENARIO, MOE_RDMA_SCENARIO } from '../../services/mockData'
-import { apiClient } from '../../services/api'
+import { apiClient, type ValidateResponse } from '../../services/api'
 import { validateScenario, type ValidationError } from '../../utils/validation'
 import { Badge } from '../common/Badge'
 import {
@@ -48,6 +48,29 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
   )
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+  const [serverValidation, setServerValidation] = useState<ValidateResponse | null>(null)
+  const [isValidatingServer, setIsValidatingServer] = useState<boolean>(false)
+
+  // Authoritative server validation: POST /scenarios/validate
+  const handleValidateServer = async () => {
+    setIsValidatingServer(true)
+    try {
+      const res = await apiClient.validateScenarioBackend(scenario)
+      setServerValidation(res)
+      if (res.valid) {
+        onNotify('Authoritative server validation passed!', 'success')
+      } else {
+        onNotify(`Server validation detected ${res.errors.length} issue(s).`, 'error')
+      }
+    } catch (err) {
+      onNotify(
+        `Server validation failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        'error'
+      )
+    } finally {
+      setIsValidatingServer(false)
+    }
+  }
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Live validation
@@ -61,9 +84,10 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
   const handleSubmitSimulation = async () => {
     if (isSubmitting) return
 
+    const isMock = apiClient.isMockMode()
     const isValid = validateCurrent(scenario)
-    if (!isValid) {
-      onNotify('Cannot submit invalid scenario. Please resolve all schema errors first.', 'error')
+    if (isMock && !isValid) {
+      onNotify('Cannot submit invalid scenario in Demo Mode. Please resolve all schema errors first.', 'error')
       return
     }
 
@@ -75,6 +99,9 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
         onRunSubmitted?.(res.runId)
       } else {
         onNotify(res.message, 'error')
+        if (res.runId) {
+          onRunSubmitted?.(res.runId)
+        }
       }
     } catch (err) {
       onNotify(
@@ -406,6 +433,24 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             </button>
             <button
               className="btn btn-sm btn-outline"
+              onClick={handleValidateServer}
+              disabled={isValidatingServer}
+              title="Run authoritative server validation (POST /scenarios/validate)"
+            >
+              {isValidatingServer ? (
+                <>
+                  <RefreshCw size={13} className="spin" />
+                  <span>Validating...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={13} color="var(--accent-teal)" />
+                  <span>Validate (Server)</span>
+                </>
+              )}
+            </button>
+            <button
+              className="btn btn-sm btn-outline"
               onClick={() => {
                 if (validateCurrent(scenario)) {
                   onScenarioSaved?.(scenario)
@@ -422,11 +467,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             <button
               className="btn btn-sm btn-primary"
               onClick={handleSubmitSimulation}
-              disabled={isSubmitting || validationErrors.length > 0}
+              disabled={isSubmitting || (apiClient.isMockMode() && validationErrors.length > 0)}
               title="Dispatch scenario to simulation engine"
               style={{
-                opacity: validationErrors.length > 0 ? 0.6 : 1,
-                cursor: validationErrors.length > 0 || isSubmitting ? 'not-allowed' : 'pointer'
+                opacity: (apiClient.isMockMode() && validationErrors.length > 0) ? 0.6 : 1,
+                cursor: (apiClient.isMockMode() && validationErrors.length > 0) || isSubmitting ? 'not-allowed' : 'pointer'
               }}
             >
               {isSubmitting ? (
@@ -444,6 +489,81 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Server Validation Feedback Notice (POST /scenarios/validate) */}
+      {serverValidation && (
+        <div
+          className="card"
+          style={{
+            backgroundColor: serverValidation.valid
+              ? 'rgba(16, 185, 129, 0.08)'
+              : 'rgba(244, 63, 94, 0.08)',
+            borderColor: serverValidation.valid
+              ? 'rgba(16, 185, 129, 0.3)'
+              : 'rgba(244, 63, 94, 0.3)',
+            padding: '16px 20px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: serverValidation.valid ? 'var(--accent-emerald)' : 'var(--accent-rose)', fontWeight: 600 }}>
+              {serverValidation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+              <span>
+                {serverValidation.valid
+                  ? 'Server Validation Passed (POST /scenarios/validate)'
+                  : 'Server Validation Issues (POST /scenarios/validate)'}
+              </span>
+            </div>
+            <button
+              className="btn btn-sm btn-outline"
+              onClick={() => setServerValidation(null)}
+              style={{ fontSize: '11px', padding: '2px 8px' }}
+            >
+              Dismiss
+            </button>
+          </div>
+
+          {serverValidation.errors.length > 0 && (
+            <div style={{ marginBottom: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-rose)' }}>Errors:</span>
+              <ul style={{ paddingLeft: '20px', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {serverValidation.errors.map((err, idx) => (
+                  <li key={idx} style={{ marginBottom: '2px' }}>
+                    <span className="mono" style={{ color: 'var(--accent-rose)' }}>{err.path}</span>: {err.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {serverValidation.warnings && serverValidation.warnings.length > 0 && (
+            <div style={{ marginBottom: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-amber)' }}>Warnings:</span>
+              <ul style={{ paddingLeft: '20px', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {serverValidation.warnings.map((w, idx) => (
+                  <li key={idx} style={{ marginBottom: '2px' }}>
+                    <span style={{ color: 'var(--accent-amber)' }}>{w}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {serverValidation.assumed && serverValidation.assumed.length > 0 && (
+            <div>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-cyan)' }}>Engine Assumptions:</span>
+              <ul style={{ paddingLeft: '20px', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {serverValidation.assumed.map((a, idx) => (
+                  <li key={idx} style={{ marginBottom: '2px' }}>
+                    <span className="mono" style={{ color: 'var(--accent-cyan)' }}>{a.path}</span>
+                    {a.source ? ` (source: ${a.source})` : ''}
+                    {a.uncertainty_pct != null ? ` [±${a.uncertainty_pct}%]` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Validation Errors Notice (if any) */}
       {validationErrors.length > 0 && (
