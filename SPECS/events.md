@@ -56,8 +56,8 @@ Unknown events must be preserved by consumers but may be ignored.
 
 | Event | Payload |
 | :--- | :--- |
-| `transfer_begin` | `link`, `bytes`, `from_node`, `to_node`, `kind` |
-| `transfer_complete` | `link`, `bytes`, `duration_ns`, `queue_delay_ns` |
+| `transfer_begin` | `link`, `path`, `bytes`, `from_node`, `to_node`, `kind` |
+| `transfer_complete` | `link`, `path`, `bytes`, `duration_ns`, `queue_delay_ns` |
 | `link_congested` | `link`, `queue_bytes`, `utilization` |
 | `link_degraded` | `link`, `bandwidth_factor`, `latency_factor` |
 | `link_restored` | `link` |
@@ -107,6 +107,10 @@ where the range is contiguous) instead of a single `page_id`. Counts are exact
 and deterministic, and the prefix/range reconstructs the page set. Consumers
 MUST NOT invent page identities beyond the documented prefix/range.
 Per-page drill-down arrives with the trace-replay work.
+
+## N-tier fields
+
+`path` is the static route's link-id list in traversal order (`link` repeats its first element for single-hop compatibility). Tier-valued fields (`tier`, `from_tier`, `to_tier`, `requested_tier`, `found_tier`, `remote_tier`) name any tier: a compute node id or a pool id.
 
 ## Ordering guarantees
 

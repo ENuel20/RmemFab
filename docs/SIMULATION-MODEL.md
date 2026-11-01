@@ -68,22 +68,21 @@ service_ns   = n / bandwidth_x
 local_cost   = latency_x + service_ns
 ```
 
-For a transfer of `n` bytes over link `l`:
+Topology is a routed link graph: compute locals and memory pools are tiers, links attach to tiers or to named switches, and every tier pair gets a static shortest-path route (BFS over directed adjacency, sorted so ties resolve deterministically; the manifest records all routes). Tiers are endpoints, never transit: only switches forward, so no route passes through a pool or a peer's local tier. For a transfer of `n` bytes over route `r` to tier `t`:
 
 ```text
-earliest_start = max(now, link_free_at_l)
-start          = earliest_start + queue_delay_l(now)
-service_ns     = n / bandwidth_l
-complete       = start + latency_l + service_ns
-link_free_at_l = start + service_ns
+servers    = every hop link on r + every intermediate switch + tier t
+             (+ the legacy single switch, when configured, on all transfers)
+start      = max(now, free_at over servers)
+per_byte   = max(1 / bandwidth over servers)
+complete   = start + latency_links + latency_switches + latency_t + n * per_byte
 ```
 
-`queue_delay_l` is zero when the link has a single FIFO server and no backlog. With a byte-limited in-flight window, the queue delay is modeled as `backlog_bytes / bandwidth_l`. This is a fluid approximation; it ignores packetization and head-of-line blocking at sub-byte scales.
+Every occupied server holds `n / bandwidth` (bandwidth is conserved). The legacy single `switch` block maps to an implicit `switch-0` occupying every transfer; named `switches` occupy only transfers whose route crosses them. When no switch is configured, bisection is unbounded and only per-link and endpoint bandwidths constrain (the manifest records this assumption on multi-node runs). This is a fluid approximation; it ignores packetization and head-of-line blocking at sub-byte scales.
 
-The engine supports two fabric modes:
+Requests shard round-robin across compute nodes. Each node runs an independent policy instance with its own observation state, and admission (`concurrency`) is enforced per node with a local queue — there is no work stealing. Trace replay honors each op's explicit `node`; ops without one follow their request's round-robin shard. Placement is single-owner N-tier: a page lives in exactly one tier (a pool or any compute local, including peers); eviction to a remote tier yields foreign pages first; a non-owner touch reads through over the static route without moving the page; a touch with no route to the page's home tier halts replay with the row. There is no replication and no coherence protocol.
 
-- **Fluid FIFO (default):** each link is a byte server with a queue and an in-flight limit. Deterministic and fast.
-- **Congestion events (optional):** externally scheduled bandwidth degradation or loss events, used for fault experiments. These are explicit events, not stochastic per-packet drops unless a seeded loss stream is enabled.
+In-flight/queue-depth breaches are counted as congestion/overflow telemetry; transfers are never dropped.
 
 ## Page model
 

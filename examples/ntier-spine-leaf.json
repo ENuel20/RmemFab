@@ -1,0 +1,256 @@
+{
+  "$schema": "../SPECS/config.schema.json",
+  "version": "0.1",
+  "name": "ntier-spine-leaf",
+  "description": "N-tier placement over a routed link graph: two compute nodes reach two memory pools through a leaf-spine fabric (pool-b hangs off the leaf, pool-a off the spine). Spill destinations are policy-chosen (nearest-with-space default), peer locals are spill candidates, and each transfer occupies every hop link plus the switches it crosses plus the destination tier.",
+  "assumptions": [
+    "Local capacity is 2 GiB per node to force remote traffic; this exercises placement, not a deployment configuration.",
+    "Link, switch, and tier latencies/bandwidths are class assumptions, not measurements.",
+    "Routing is static shortest-path; congestion does not reroute (see ROADMAP deferred items).",
+    "Placement is single-owner: no replication, no coherence protocol.",
+    "The workload is synthetic KV-cache decode, not a captured trace."
+  ],
+  "seed": 7,
+  "duration_ns": 5000000000,
+  "warmup_ns": 1000000000,
+  "page_size_bytes": 2097152,
+  "nodes": [
+    {
+      "id": "node-0",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 2147483648,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 2 GiB so one 8k-context Llama-3-70B KV cache (about 2.54 GiB) cannot fit.",
+          "date": "2026-10-29",
+          "notes": "Test fixture, not a deployment configuration."
+        }
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-29"
+        }
+      }
+    },
+    {
+      "id": "node-1",
+      "role": "compute",
+      "local_memory": {
+        "capacity_bytes": 2147483648,
+        "latency_ns": 90,
+        "bandwidth_bytes_per_ns": 400,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md local DRAM preset, capacity overridden for this test",
+          "method": "Latency and bandwidth use the local DRAM preset. Capacity is deliberately reduced to 2 GiB so one 8k-context Llama-3-70B KV cache (about 2.54 GiB) cannot fit.",
+          "date": "2026-10-29",
+          "notes": "Test fixture, not a deployment configuration."
+        }
+      },
+      "compute": {
+        "accelerator": "H100-80GB",
+        "accelerators": 8,
+        "accelerator_memory_bytes": 85899345920,
+        "provenance": {
+          "kind": "sourced",
+          "source": "NVIDIA H100 SXM product brief",
+          "method": "Accelerator count and memory capacity from the product class. tokens_per_second intentionally omitted.",
+          "date": "2026-10-29"
+        }
+      }
+    },
+    {
+      "id": "pool-a",
+      "role": "memory",
+      "remote_memory": {
+        "capacity_bytes": 1099511627776,
+        "latency_ns": 180,
+        "bandwidth_bytes_per_ns": 48,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+          "method": "CXL.mem class latency and per-port bandwidth; not measured and not fitted to a switch topology.",
+          "date": "2026-10-29",
+          "uncertainty_pct": 30
+        }
+      }
+    },
+    {
+      "id": "pool-b",
+      "role": "memory",
+      "remote_memory": {
+        "capacity_bytes": 1099511627776,
+        "latency_ns": 500,
+        "bandwidth_bytes_per_ns": 24,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset",
+          "method": "CXL.mem class latency and per-port bandwidth; not measured and not fitted to a switch topology.",
+          "date": "2026-10-29",
+          "uncertainty_pct": 30
+        }
+      }
+    }
+  ],
+  "fabric": {
+    "links": [
+      {
+        "id": "n0-leaf",
+        "from": "node-0",
+        "to": "leaf-0",
+        "bandwidth_bytes_per_ns": 48,
+        "latency_ns": 50,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md link-class preset",
+          "method": "One-way latency and sustained bandwidth for the link class; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-31",
+          "uncertainty_pct": 30
+        }
+      },
+      {
+        "id": "n1-leaf",
+        "from": "node-1",
+        "to": "leaf-0",
+        "bandwidth_bytes_per_ns": 48,
+        "latency_ns": 50,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md link-class preset",
+          "method": "One-way latency and sustained bandwidth for the link class; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-31",
+          "uncertainty_pct": 30
+        }
+      },
+      {
+        "id": "leaf-spine",
+        "from": "leaf-0",
+        "to": "spine-0",
+        "bandwidth_bytes_per_ns": 96,
+        "latency_ns": 100,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md link-class preset",
+          "method": "One-way latency and sustained bandwidth for the link class; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-31",
+          "uncertainty_pct": 30
+        }
+      },
+      {
+        "id": "spine-pa",
+        "from": "spine-0",
+        "to": "pool-a",
+        "bandwidth_bytes_per_ns": 48,
+        "latency_ns": 60,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md link-class preset",
+          "method": "One-way latency and sustained bandwidth for the link class; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-31",
+          "uncertainty_pct": 30
+        }
+      },
+      {
+        "id": "leaf-pb",
+        "from": "leaf-0",
+        "to": "pool-b",
+        "bandwidth_bytes_per_ns": 24,
+        "latency_ns": 60,
+        "bidirectional": true,
+        "provenance": {
+          "kind": "assumed",
+          "source": "docs/HARDWARE-MODELS.md link-class preset",
+          "method": "One-way latency and sustained bandwidth for the link class; queue depth and in-flight limits are scenario assumptions.",
+          "date": "2026-10-31",
+          "uncertainty_pct": 30
+        }
+      }
+    ],
+    "switches": [
+      {
+        "id": "leaf-0",
+        "bandwidth_bytes_per_ns": 100,
+        "latency_ns": 20,
+        "provenance": {
+          "kind": "assumed",
+          "source": "scenario assumption for multi-switch fabric demo",
+          "method": "Leaf sized below the sum of its downlinks so it can bind; spine sized to not bind.",
+          "date": "2026-10-31"
+        }
+      },
+      {
+        "id": "spine-0",
+        "bandwidth_bytes_per_ns": 200,
+        "latency_ns": 20,
+        "provenance": {
+          "kind": "assumed",
+          "source": "scenario assumption for multi-switch fabric demo",
+          "method": "Leaf sized below the sum of its downlinks so it can bind; spine sized to not bind.",
+          "date": "2026-10-31"
+        }
+      }
+    ]
+  },
+  "workload": {
+    "type": "synthetic",
+    "profile": "kv_cache_decode",
+    "model": {
+      "name": "llama-3-70b",
+      "family": "llama",
+      "layers": 80,
+      "attention_heads": 64,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "dtype_bytes": 2
+    },
+    "requests": {
+      "arrival_rate_per_second": 2,
+      "concurrency": 4,
+      "prompt_tokens": 8192,
+      "generated_tokens": 128,
+      "phase_mix": {
+        "prefill": 0.2,
+        "decode": 0.8
+      }
+    }
+  },
+  "policy": {
+    "name": "swap_remote"
+  },
+  "faults": {
+    "node_failures": [],
+    "link_degradations": [],
+    "packet_loss": {
+      "enabled": false,
+      "ppm": 0
+    }
+  },
+  "metrics": {
+    "percentiles": [
+      50,
+      95,
+      99
+    ],
+    "sample_interval_ns": 100000000,
+    "warmup_ns": 1000000000
+  },
+  "output": {
+    "format": "jsonl",
+    "path": "runs/ntier-spine-leaf",
+    "include_event_log": true
+  }
+}

@@ -130,6 +130,14 @@ This is a planning aid for the hackathon, not a contractual schedule.
 - More trace converters (NPU, custom accelerators).
 - Export to standard experiment formats for publication.
 
+## Deferred with reason (tracked, not forgotten)
+
+- **Packet-level congestion control (DCQCN/TIMELY/PFC).** Needs per-packet events, RTT clocks, and endpoint rate state machines — ns-3 territory at 10–100× the event rate, answering "how do endpoints share" instead of RmemFab's "where should pages live". The fluid model stays; the boundary is documented in `SIMULATION-MODEL.md`.
+- **Fault injection and loss.** `faults` block and `loss_ppm` parse, warn, and ignore. Designed in PRODUCT-SPEC; unbuilt. Explicitly deferred by operator decision 2026-10-30.
+- **Shared (coherent) pages across nodes.** N-tier placement is single-owner by design; MSI/MESI-style coherence is a separate project.
+- **Adaptive routing / ECMP.** Routing is static shortest-path; congestion does not reroute.
+- **N-tier policy optimization.** `choose_tier` exists as a hook with a nearest-with-space default; no policy optimizes destination choice yet.
+
 ## Out of scope
 
 - Cycle-accurate hardware emulation.

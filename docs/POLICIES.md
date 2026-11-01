@@ -53,6 +53,12 @@ Policies cannot:
 - Spawn threads.
 - Mutate scenario state directly.
 
+## N-tier destination choice (`choose_tier`)
+
+Spill and eviction destinations are policy decisions. The engine offers every reachable remote tier as a candidate `(tier_id, kind, free_pages, hops, path_latency_ns)` with `kind` in `{"pool", "peer"}`, and calls `choose_tier(candidates)`; the default picks nearest by `(hops, latency, id)` — the cheapest reachable home. No built-in policy overrides it yet (see ROADMAP: N-tier policy optimization is deferred), so all placement today is nearest-with-space.
+
+Victim order is fixed across policies: foreign pages parked on this tier yield first (ordered by the policy's `victim_key`), then domestic pages. Placement stays single-owner: a page lives in exactly one tier, and a non-owner touch reads through without moving the page.
+
 ## Built-in policies
 
 ### Local-only (baseline)

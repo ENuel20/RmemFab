@@ -81,6 +81,12 @@
         },
         "switch": {
           "$ref": "#/$defs/switch"
+        },
+        "switches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/namedSwitch"
+          }
         }
       }
     },
@@ -317,6 +323,34 @@
         "bandwidth_bytes_per_ns"
       ],
       "properties": {
+        "bandwidth_bytes_per_ns": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "latency_ns": {
+          "type": "number",
+          "minimum": 0
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "namedSwitch": {
+      "type": "object",
+      "description": "One named switch in a multi-switch fabric. Links attach to switches by id; transfers crossing a switch occupy its server.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "bandwidth_bytes_per_ns"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "minLength": 1,
+          "maxLength": 64
+        },
         "bandwidth_bytes_per_ns": {
           "type": "number",
           "exclusiveMinimum": 0
