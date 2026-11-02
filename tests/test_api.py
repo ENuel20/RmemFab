@@ -270,6 +270,12 @@ class ApiContract(unittest.TestCase):
         self.assertEqual(prof["counts"]["read"], 1)
         self.assertEqual(prof["sha256"][:16], prof["trace_id"])
         tid = prof["trace_id"]
+        # The advertised path runs a real replay.
+        scen = trace_scenario("placeholder", policy="swap_remote")
+        scen["workload"] = {"type": "trace", "path": prof["workload_path"]}
+        r = self.c.post("/runs", json={"scenario": scen})
+        self.assertEqual(r.status_code, 202, r.text)
+        self.assertEqual(r.json()["status"], "completed")
         self.assertEqual(self.c.get(f"/traces/{tid}").json()["trace_id"], tid)
         self.assertTrue(any(t["trace_id"] == tid
                             for t in self.c.get("/traces").json()))

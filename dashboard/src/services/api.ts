@@ -13,7 +13,14 @@ import type {
   EventsResponse,
   ComparisonVerdict,
   ValidateResponse,
-  TraceProfile
+  TraceProfile,
+  ApplyResponse,
+  ChatMessage,
+  ChatResponse,
+  DraftResponse,
+  PatchOp,
+  RollbackResponse,
+  VersionDetail
 } from '../types/telemetry'
 import { adaptRunSummaryToSimulationRun } from '../types/telemetry'
 import { MOCK_SIMULATION_RUNS, LLAMA_70B_CXL_SCENARIO } from './mockData'
@@ -21,8 +28,46 @@ import { validateScenario } from '../utils/validation'
 import {
   validateRunSummaryList,
   validateRunDetail,
-  validateSeriesPoints
+  validateSeriesPoints,
+  validateTraceProfile,
+  validateDraftResponse,
+  validateChatResponse,
+  validateApplyResponse,
+  validateRollbackResponse,
+  validateVersionDetail
 } from './contractValidators'
+
+/** HTTP failure with the parsed body attached (422s carry errors[]). */
+export class ApiError extends Error {
+  status: number
+  detail: unknown
+  constructor(status: number, message: string, detail?: unknown) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+  }
+}
+
+export function apiErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.detail && typeof err.detail === 'object') {
+    const d = err.detail as Record<string, unknown>
+    const inner = (d.detail ?? d.Detail ?? d) as Record<string, unknown> | unknown
+    if (typeof inner === 'string') return inner
+    if (inner && typeof inner === 'object') {
+      const rec = inner as Record<string, unknown>
+      if (typeof rec.error === 'string') return rec.error
+      if (typeof rec.reason === 'string') return rec.reason
+      if (Array.isArray(rec.errors)) {
+        return (rec.errors as Array<{ path?: string; message?: string }>)
+          .map((e) => `${e.path || 'error'}: ${e.message || JSON.stringify(e)}`)
+          .join('; ')
+      }
+    }
+    return err.message
+  }
+  return err instanceof Error ? err.message : String(err)
+}
 
 export type { ValidateResponse } from '../types/telemetry'
 
@@ -43,7 +88,7 @@ export interface SubmitRunOptions {
 
 class RmemFabApiClient {
   private baseUrl: string = 'http://localhost:8000'
-  private useMock: boolean = true
+  private useMock: boolean = false
   private cachedRuns: SimulationRun[] = [...MOCK_SIMULATION_RUNS]
 
   constructor() {
@@ -73,7 +118,7 @@ class RmemFabApiClient {
 
   public resetToDefaults(): void {
     this.baseUrl = 'http://localhost:8000'
-    this.useMock = true
+    this.useMock = false
     localStorage.removeItem('rmemfab_api_url')
     localStorage.removeItem('rmemfab_use_mock')
     this.cachedRuns = [...MOCK_SIMULATION_RUNS]
@@ -364,13 +409,14 @@ class RmemFabApiClient {
 
     if (res.status === 422) {
       const body = await res.json()
-      if (body.detail && typeof body.detail === 'object' && body.detail.verdict === 'refused') {
-        return body.detail
+      const inner = body.detail ?? body.Detail
+      if (inner && typeof inner === 'object' && (inner as { verdict?: string }).verdict === 'refused') {
+        return inner
       }
       if (body.verdict === 'refused') {
         return body
       }
-      return { verdict: 'refused', reason: typeof body.detail === 'string' ? body.detail : JSON.stringify(body) }
+      return { verdict: 'refused', reason: typeof inner === 'string' ? inner : JSON.stringify(body) }
     }
 
     throw new Error(`Comparison API failed: HTTP ${res.status}`)
@@ -394,7 +440,9 @@ class RmemFabApiClient {
     if (this.useMock) return []
     const res = await fetch(`${this.baseUrl}/traces`, { signal: AbortSignal.timeout(4000) })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-    return (await res.json()) as TraceProfile[]
+    const body: unknown = await res.json()
+    if (!Array.isArray(body)) throw new Error('Invalid trace list from backend')
+    return body.map((t) => validateTraceProfile(t))
   }
 
   public async getOverviewKpis(): Promise<KpiMetric[]> {
@@ -662,6 +710,254 @@ class RmemFabApiClient {
         }`
       }
     }
+  }
+
+  private requireLive(feature: string): void {
+    if (this.useMock) {
+      throw new Error(`${feature} needs a live backend (Settings → Live mode)`)
+    }
+  }
+
+  private async requestJson(path: string, init: RequestInit, timeoutMs: number): Promise<unknown> {
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        ...init,
+        signal: AbortSignal.timeout(timeoutMs)
+      })
+    } catch (err) {
+      throw new ApiError(0, `Cannot reach FastAPI backend at ${this.baseUrl}: ${err instanceof Error ? err.message : 'Connection refused'}`)
+    }
+    let body: unknown
+    try {
+      body = await res.json()
+    } catch {
+      body = null
+    }
+    if (!res.ok) {
+      throw new ApiError(res.status, `Request failed: HTTP ${res.status}`, body)
+    }
+    return body
+  }
+
+  /**
+   * Natural-language scenario draft: POST /scenarios/draft.
+   */
+  public async draftScenario(prompt: string, parent_version?: string): Promise<DraftResponse> {
+    this.requireLive('Scenario drafting')
+    const body = await this.requestJson('/scenarios/draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(parent_version ? { prompt, parent_version } : { prompt })
+    }, 120000)
+    return validateDraftResponse(body)
+  }
+
+  /**
+   * Telemetry-grounded chat: POST /assistant/chat (non-stream).
+   */
+  public async chatAssistant(
+    messages: ChatMessage[], run_id?: string | null, suggest_patch?: boolean
+  ): Promise<ChatResponse> {
+    this.requireLive('Assistant chat')
+    const body = await this.requestJson('/assistant/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages,
+        context: run_id ? { run_id } : {},
+        suggest_patch: !!suggest_patch
+      })
+    }, 120000)
+    return validateChatResponse(body)
+  }
+
+  /**
+   * Streaming chat: POST /assistant/chat with stream=true. Calls onToken for
+   * each content delta; resolves with the full text. Throws ApiError on a
+   * mid-stream {"error"} chunk.
+   */
+  public async chatAssistantStream(
+    messages: ChatMessage[], run_id: string | undefined,
+    onToken: (token: string) => void, signal?: AbortSignal
+  ): Promise<string> {
+    this.requireLive('Assistant chat')
+    const res = await fetch(`${this.baseUrl}/assistant/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, context: run_id ? { run_id } : {}, stream: true }),
+      signal: signal ?? AbortSignal.timeout(180000)
+    })
+    if (!res.ok || !res.body) {
+      throw new ApiError(res.status, `Request failed: HTTP ${res.status}`)
+    }
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    let full = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      let idx: number
+      while ((idx = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, idx).trim()
+        buf = buf.slice(idx + 1)
+        if (!line.startsWith('data:')) continue
+        const payload = line.slice(5).trim()
+        if (payload === '[DONE]') return full
+        try {
+          const chunk = JSON.parse(payload) as Record<string, unknown>
+          if (typeof chunk.error === 'string') {
+            throw new ApiError(502, chunk.error)
+          }
+          const choices = chunk.choices as Array<{ delta?: { content?: string } }> | undefined
+          const token = choices?.[0]?.delta?.content || ''
+          if (token) {
+            full += token
+            onToken(token)
+          }
+        } catch (err) {
+          if (err instanceof ApiError) throw err
+          // Ignore malformed SSE lines; the stream is best-effort.
+        }
+      }
+    }
+    return full
+  }
+
+  /**
+   * Apply a patch or instruction: POST /assistant/apply (202).
+   */
+  public async applyChange(args: {
+    parent_run_id?: string
+    parent_version?: string
+    patch?: PatchOp[]
+    instruction?: string
+    note?: string
+  }): Promise<ApplyResponse> {
+    this.requireLive('Apply')
+    const body = await this.requestJson('/assistant/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...args, no_events: false })
+    }, 300000)
+    return validateApplyResponse(body)
+  }
+
+  /**
+   * Audited rollback: POST /assistant/rollback (202).
+   */
+  public async rollbackChange(args: {
+    to_version: string
+    from_version?: string
+    note?: string
+  }): Promise<RollbackResponse> {
+    this.requireLive('Rollback')
+    const body = await this.requestJson('/assistant/rollback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...args, no_events: false })
+    }, 300000)
+    return validateRollbackResponse(body)
+  }
+
+  /**
+   * What-if versioning: POST /scenarios/version.
+   */
+  public async createVersion(args: {
+    parent_version?: string
+    scenario?: Record<string, unknown>
+    patch?: PatchOp[]
+  }): Promise<{ version: string; parent_version: string | null; changes: unknown[]; unchanged: string[] }> {
+    this.requireLive('Scenario versions')
+    const body = await this.requestJson('/scenarios/version', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args)
+    }, 30000) as Record<string, unknown>
+    if (typeof body.version !== 'string') {
+      throw new ApiError(502, 'Invalid version response from backend', body)
+    }
+    return {
+      version: body.version,
+      parent_version: typeof body.parent_version === 'string' ? body.parent_version : null,
+      changes: Array.isArray(body.changes) ? body.changes : [],
+      unchanged: Array.isArray(body.unchanged) ? (body.unchanged as string[]) : []
+    }
+  }
+
+  /**
+   * Fetch a stored version: GET /scenarios/version/{v}.
+   */
+  public async getVersion(version: string): Promise<VersionDetail> {
+    this.requireLive('Scenario versions')
+    const body = await this.requestJson(
+      `/scenarios/version/${encodeURIComponent(version)}`, {}, 30000)
+    return validateVersionDetail(body)
+  }
+
+  /**
+   * Upload a trace file: POST /traces (multipart).
+   */
+  public async uploadTrace(file: File): Promise<TraceProfile> {
+    this.requireLive('Trace upload')
+    const form = new FormData()
+    form.append('file', file, file.name)
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}/traces`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(120000)
+      })
+    } catch (err) {
+      throw new ApiError(0, `Cannot reach FastAPI backend at ${this.baseUrl}: ${err instanceof Error ? err.message : 'Connection refused'}`)
+    }
+    const body: unknown = await res.json().catch(() => null)
+    if (!res.ok) {
+      throw new ApiError(res.status, `Upload failed: HTTP ${res.status}`, body)
+    }
+    return validateTraceProfile(body)
+  }
+
+  /**
+   * Delete an uploaded trace: DELETE /traces/{id}.
+   */
+  public async deleteTrace(traceId: string): Promise<void> {
+    this.requireLive('Trace delete')
+    await this.requestJson(`/traces/${encodeURIComponent(traceId)}`, { method: 'DELETE' }, 30000)
+  }
+
+  /**
+   * Live virtual-time event stream: GET /runs/{id}/stream (SSE).
+   * Returns a closer. onEvent receives parsed event objects.
+   */
+  public openRunStream(
+    runId: string, onEvent: (event: Record<string, unknown>) => void,
+    onError?: (err: Error) => void
+  ): () => void {
+    if (this.useMock) {
+      onError?.(new Error('Run streaming needs a live backend (Settings → Live mode)'))
+      return () => undefined
+    }
+    const source = new EventSource(`${this.baseUrl}/runs/${encodeURIComponent(runId)}/stream`)
+    source.onmessage = (msg) => {
+      if (msg.data === '[DONE]') {
+        source.close()
+        return
+      }
+      try {
+        onEvent(JSON.parse(msg.data) as Record<string, unknown>)
+      } catch {
+        // Ignore malformed SSE lines.
+      }
+    }
+    source.onerror = () => {
+      source.close()
+      onError?.(new Error('Stream connection closed'))
+    }
+    return () => source.close()
   }
 }
 

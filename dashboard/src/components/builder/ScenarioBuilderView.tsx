@@ -8,8 +8,9 @@ import type {
   ProvenanceConfig,
   ProvenanceKind
 } from '../../types/scenario'
-import { LLAMA_70B_CXL_SCENARIO, MOE_RDMA_SCENARIO } from '../../services/mockData'
-import { apiClient, type ValidateResponse } from '../../services/api'
+import { LLAMA_70B_CXL_SCENARIO } from '../../services/mockData'
+import { apiClient, apiErrorMessage, type ValidateResponse } from '../../services/api'
+import type { DraftResponse } from '../../types/telemetry'
 import { validateScenario, type ValidationError } from '../../utils/validation'
 import { Badge } from '../common/Badge'
 import {
@@ -28,13 +29,16 @@ import {
   Network,
   Cpu,
   Settings2,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  MessageSquareText
 } from 'lucide-react'
 
 interface ScenarioBuilderViewProps {
   onNotify: (text: string, type: 'success' | 'error' | 'info') => void
   onScenarioSaved?: (scenario: ScenarioConfig) => void
   onRunSubmitted?: (runId: string) => void
+  traceWorkloadSeed?: { path: string; nonce: number } | null
 }
 
 interface ProvenanceEditorProps {
@@ -141,12 +145,13 @@ const ProvenanceEditor: React.FC<ProvenanceEditorProps> = ({ label, value, onCha
   )
 }
 
-type BuilderTab = 'general' | 'infrastructure' | 'workload' | 'policy' | 'review'
+type BuilderTab = 'general' | 'infrastructure' | 'workload' | 'policy' | 'review' | 'describe'
 
 export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
   onNotify,
   onScenarioSaved,
-  onRunSubmitted
+  onRunSubmitted,
+  traceWorkloadSeed
 }) => {
   const [activeTab, setActiveTab] = useState<BuilderTab>('general')
   const [scenario, setScenario] = useState<ScenarioConfig>(() =>
@@ -157,6 +162,32 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
   const [serverValidation, setServerValidation] = useState<ValidateResponse | null>(null)
   const [validationSource, setValidationSource] = useState<'mock' | 'live' | null>(null)
   const [isValidatingServer, setIsValidatingServer] = useState<boolean>(false)
+  const [draftPrompt, setDraftPrompt] = useState<string>('')
+  const [isDrafting, setIsDrafting] = useState<boolean>(false)
+  const [draftError, setDraftError] = useState<string | null>(null)
+  const [draftResult, setDraftResult] = useState<DraftResponse | null>(null)
+
+  const handleDraft = async () => {
+    const prompt = draftPrompt.trim()
+    if (!prompt || isDrafting) return
+    setIsDrafting(true)
+    setDraftError(null)
+    setDraftResult(null)
+    try {
+      const res = await apiClient.draftScenario(prompt)
+      setDraftResult(res)
+      setScenario(JSON.parse(JSON.stringify(res.scenario)))
+      validateCurrent(res.scenario)
+      setActiveTab('review')
+      onNotify(`Draft loaded as version ${res.version} — review before running`, 'success')
+    } catch (err) {
+      const msg = apiErrorMessage(err)
+      setDraftError(msg)
+      onNotify(`Draft failed: ${msg}`, 'error')
+    } finally {
+      setIsDrafting(false)
+    }
+  }
 
   // Server / Local Demo validation
   const handleValidateServer = async () => {
@@ -187,6 +218,21 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
     const res = validateScenario(updated)
     setValidationErrors(res.errors)
     return res.isValid
+  }
+
+  // Trace Library handoff: one-shot sync of the replayed trace path into the
+  // workload tab. Render-time adjustment (React-endorsed for prop-derived
+  // state); the nonce guard makes it fire exactly once per handoff.
+  const [appliedTraceSeed, setAppliedTraceSeed] = useState<number | undefined>(undefined)
+  if (traceWorkloadSeed && traceWorkloadSeed.nonce !== appliedTraceSeed) {
+    setAppliedTraceSeed(traceWorkloadSeed.nonce)
+    const seeded = {
+      ...scenario,
+      workload: { type: 'trace', path: traceWorkloadSeed.path } as ScenarioConfig['workload']
+    }
+    setScenario(seeded)
+    setActiveTab('workload')
+    validateCurrent(seeded)
   }
 
   // Handle run simulation submission
@@ -330,62 +376,41 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
     validateCurrent(updated)
   }
 
-  // Workload profile change
+  // Workload profile change (kv_cache_decode is the only implemented profile)
   const handleProfileChange = (profile: WorkloadProfile) => {
     if (scenario.workload.type !== 'synthetic') return
-
-    const baseModel = scenario.workload.model || {}
-    const updatedModel = { ...baseModel }
-
-    if (profile === 'moe') {
-      updatedModel.experts = 8
-      updatedModel.top_k = 2
-      updatedModel.expert_size_bytes = 176160768
-      updatedModel.popularity_distribution = 'zipf'
-      updatedModel.popularity_skew = 1.1
-    }
 
     const updated: ScenarioConfig = {
       ...scenario,
       workload: {
         ...scenario.workload,
-        profile,
-        model: updatedModel
+        profile
       }
     }
     setScenario(updated)
     validateCurrent(updated)
   }
 
-  // Policy change
+  // Policy change (defaults mirror the backend KNOWN_PARAMS; unknown keys
+  // are ignored server-side, so only real knobs are emitted here)
   const handlePolicyChange = (name: PolicyName) => {
     let params: Record<string, unknown> = {}
     if (name === 'hot_cold') {
       params = {
-        hot_threshold: 8,
-        cold_threshold: 1,
-        tick_ns: 1000000,
-        min_residency_ns: 10000000,
-        max_migrations_per_tick: 64
+        k: 2,
+        hot_threshold: 3,
+        cold_threshold: 1
       }
     } else if (name === 'frequency_aware') {
       params = {
-        history_length: 8,
-        k: 2,
-        protect_fraction: 0.6,
-        migration_watermark: 0.85,
-        max_migrations_per_tick: 128
+        k: 2
       }
     } else if (name === 'predictive_prefetch') {
       params = {
-        confidence_threshold: 0.75,
-        lookahead_depth: 4,
-        max_inflight_prefetches: 32
-      }
-    } else if (name === 'cost_aware') {
-      params = {
-        cost_weight_latency: 0.6,
-        cost_weight_bandwidth: 0.4
+        degree: 1,
+        stride: 1,
+        max_in_flight: 64,
+        on_hit: true
       }
     }
 
@@ -452,12 +477,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
   }
 
   // Reset to example preset
-  const handleReset = (preset: 'llama' | 'moe') => {
-    const target = preset === 'llama' ? LLAMA_70B_CXL_SCENARIO : MOE_RDMA_SCENARIO
-    const clone = JSON.parse(JSON.stringify(target))
+  const handleReset = () => {
+    const clone = JSON.parse(JSON.stringify(LLAMA_70B_CXL_SCENARIO))
     setScenario(clone)
     validateCurrent(clone)
-    onNotify(`Reset editor to ${preset === 'llama' ? 'Llama-70B CXL' : 'MoE RDMA'} scenario`, 'info')
+    onNotify('Reset editor to Llama-70B CXL scenario', 'info')
   }
 
   // Compute KV cache estimated size per token
@@ -502,19 +526,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               className="btn btn-sm btn-outline"
-              onClick={() => handleReset('llama')}
+              onClick={() => handleReset()}
               title="Load Llama-70B 4-node CXL benchmark"
             >
               <RotateCcw size={13} />
               <span>Load Llama-70B</span>
-            </button>
-            <button
-              className="btn btn-sm btn-outline"
-              onClick={() => handleReset('moe')}
-              title="Load Mixtral MoE 8-node RDMA benchmark"
-            >
-              <RotateCcw size={13} />
-              <span>Load MoE Preset</span>
             </button>
             <button
               className="btn btn-sm btn-secondary"
@@ -712,6 +728,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       {/* Tabs Navigation */}
       <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '2px' }}>
         {[
+          { id: 'describe' as BuilderTab, label: '0. Describe', icon: <Sparkles size={14} /> },
           { id: 'general' as BuilderTab, label: '1. General', icon: <Settings2 size={14} /> },
           { id: 'infrastructure' as BuilderTab, label: '2. Infrastructure', icon: <Network size={14} /> },
           { id: 'workload' as BuilderTab, label: '3. Workload', icon: <Cpu size={14} /> },
@@ -731,6 +748,76 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       </div>
 
       {/* TAB 1: GENERAL */}
+      {activeTab === 'describe' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title-group">
+              <div className="card-title">
+                <MessageSquareText size={15} style={{ marginRight: '8px', verticalAlign: '-2px' }} />
+                Describe Your Experiment
+              </div>
+              <div className="card-subtitle">
+                Plain language in, validated scenario out. The draft loads into this
+                editor for review — nothing runs until you submit it.
+              </div>
+            </div>
+          </div>
+
+          {apiClient.isMockMode() ? (
+            <div style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+              <Sparkles size={28} color="var(--text-muted)" />
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '10px' }}>
+                Drafting needs a live backend
+              </div>
+              <div style={{ fontSize: '12px', marginTop: '6px' }}>
+                Switch to Live mode in Settings to generate scenarios from text.
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="form-group">
+                <label className="form-label" htmlFor="draft-prompt">
+                  What should the simulation model?
+                </label>
+                <textarea
+                  id="draft-prompt"
+                  value={draftPrompt}
+                  onChange={(e) => setDraftPrompt(e.target.value)}
+                  placeholder="e.g. 4 nodes with local DRAM and a shared 200 Gbps RDMA pool running KV-cache decode; compare swap_remote and hot_cold"
+                  rows={5}
+                  disabled={isDrafting}
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+              </div>
+              {draftError && (
+                <div role="alert" style={{ fontSize: '12.5px', color: 'var(--accent-rose)', marginBottom: '10px' }}>
+                  {draftError}
+                </div>
+              )}
+              {draftResult && (
+                <div className="mono" style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                  Model {draftResult.model} · version {draftResult.version}
+                  {draftResult.validation.warnings.length > 0 && (
+                    <> · Warnings: {draftResult.validation.warnings.join('; ')}</>
+                  )}
+                  {draftResult.validation.assumed.length > 0 && (
+                    <> · Assumed: {draftResult.validation.assumed.length} parameters (see Review tab)</>
+                  )}
+                </div>
+              )}
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => void handleDraft()}
+                disabled={isDrafting || draftPrompt.trim().length === 0}
+              >
+                <Sparkles size={13} />
+                <span>{isDrafting ? 'Drafting…' : 'Generate scenario'}</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {activeTab === 'general' && (
         <div className="card">
           <div className="card-header">
@@ -1217,6 +1304,58 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             </div>
           </div>
 
+          <div className="form-grid-2" style={{ marginBottom: '12px' }}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="workload-type">Workload source</label>
+              <select
+                id="workload-type"
+                value={scenario.workload.type}
+                onChange={(e) => {
+                  const type = e.target.value as 'synthetic' | 'trace'
+                  const prevSynth = scenario.workload.type === 'synthetic' ? scenario.workload : null
+                  const updated: ScenarioConfig = type === 'trace'
+                    ? { ...scenario, workload: { type: 'trace', path: '' } }
+                    : {
+                        ...scenario,
+                        workload: {
+                          type: 'synthetic',
+                          profile: 'kv_cache_decode',
+                          model: prevSynth?.model
+                            ?? { layers: 32, attention_heads: 32, kv_heads: 8, head_dim: 128, dtype_bytes: 2 },
+                          requests: prevSynth?.requests
+                        }
+                      }
+                  setScenario(updated)
+                  validateCurrent(updated)
+                }}
+              >
+                <option value="synthetic">synthetic (KV generator)</option>
+                <option value="trace">trace (replay a file)</option>
+              </select>
+            </div>
+            {scenario.workload.type === 'trace' && (
+              <div className="form-group">
+                <label className="form-label" htmlFor="workload-path">Trace path (server-side)</label>
+                <input
+                  id="workload-path"
+                  type="text"
+                  value={scenario.workload.path || ''}
+                  onChange={(e) => {
+                    const updated: ScenarioConfig = {
+                      ...scenario,
+                      workload: { type: 'trace', path: e.target.value }
+                    }
+                    setScenario(updated)
+                    validateCurrent(updated)
+                  }}
+                  placeholder="traces/uploads/&lt;trace_id&gt;.jsonl — see Trace Library"
+                  autoComplete="off"
+                  className="mono"
+                />
+              </div>
+            )}
+          </div>
+
           {scenario.workload.type === 'synthetic' && (
             <div className="form-grid-2">
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -1226,10 +1365,6 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                   onChange={(e) => handleProfileChange(e.target.value as WorkloadProfile)}
                 >
                   <option value="kv_cache_decode">kv_cache_decode (LLM Autoregressive Token Generation)</option>
-                  <option value="prefill">prefill (Prompt Processing Sequential Scans)</option>
-                  <option value="sparse_attention">sparse_attention (Long-Context Strided & Global Tokens)</option>
-                  <option value="moe">moe (Mixture-of-Experts Skewed Routing)</option>
-                  <option value="mixed">mixed (Multi-Tenant Serving Interference)</option>
                 </select>
                 <span className="form-help">
                   Normalized memory event source for the discrete-event scheduler
@@ -1343,51 +1478,6 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                 </div>
               )}
 
-              {/* MoE specific fields */}
-              {scenario.workload.profile === 'moe' && (
-                <>
-                  <div className="form-group">
-                    <label className="form-label">Total Experts</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={scenario.workload.model?.experts || 8}
-                      onChange={(e) => {
-                        if (scenario.workload.type === 'synthetic') {
-                          setScenario({
-                            ...scenario,
-                            workload: {
-                              ...scenario.workload,
-                              model: { ...scenario.workload.model, experts: parseInt(e.target.value) || 1 }
-                            }
-                          })
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Top-K Active per Token</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={scenario.workload.model?.top_k || 2}
-                      onChange={(e) => {
-                        if (scenario.workload.type === 'synthetic') {
-                          setScenario({
-                            ...scenario,
-                            workload: {
-                              ...scenario.workload,
-                              model: { ...scenario.workload.model, top_k: parseInt(e.target.value) || 1 }
-                            }
-                          })
-                        }
-                      }}
-                    />
-                  </div>
-                </>
-              )}
-
               {/* Request Parameters */}
               <div className="form-group">
                 <label className="form-label">Arrival Rate (req/sec)</label>
@@ -1458,7 +1548,6 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                 <option value="swap_remote">swap_remote (Reactive Demand Paging Baseline)</option>
                 <option value="local_only">local_only (Local DRAM Only Baseline - No Remote Fabric)</option>
                 <option value="predictive_prefetch">predictive_prefetch (Lookahead Speculative Prefetch)</option>
-                <option value="cost_aware">cost_aware (Multi-Objective Cost vs. Latency Optimization)</option>
               </select>
             </div>
 
@@ -1466,10 +1555,27 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             {scenario.policy.name === 'hot_cold' && (
               <>
                 <div className="form-group">
+                  <label className="form-label">K (Reference Distance)</label>
+                  <input
+                    type="number"
+                    value={(scenario.policy.params?.k as number) || 2}
+                    onChange={(e) => {
+                      setScenario({
+                        ...scenario,
+                        policy: {
+                          ...scenario.policy,
+                          params: { ...scenario.policy.params, k: parseInt(e.target.value) || 1 }
+                        }
+                      })
+                    }}
+                  />
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">Hot Threshold (Hits / Window)</label>
                   <input
                     type="number"
-                    value={(scenario.policy.params?.hot_threshold as number) || 8}
+                    value={(scenario.policy.params?.hot_threshold as number) || 3}
                     onChange={(e) => {
                       setScenario({
                         ...scenario,
@@ -1501,63 +1607,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                   <span className="form-help">Demotes local page to remote memory</span>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Tick Interval (ns)</label>
-                  <input
-                    type="number"
-                    value={(scenario.policy.params?.tick_ns as number) || 1000000}
-                    onChange={(e) => {
-                      setScenario({
-                        ...scenario,
-                        policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, tick_ns: parseInt(e.target.value) || 0 }
-                        }
-                      })
-                    }}
-                  />
-                  <span className="form-help">Virtual time period for EWMA decay update</span>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Max Migrations Per Tick</label>
-                  <input
-                    type="number"
-                    value={(scenario.policy.params?.max_migrations_per_tick as number) || 64}
-                    onChange={(e) => {
-                      setScenario({
-                        ...scenario,
-                        policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, max_migrations_per_tick: parseInt(e.target.value) || 0 }
-                        }
-                      })
-                    }}
-                  />
-                  <span className="form-help">Rate-limits fabric traffic to prevent queue storms</span>
-                </div>
               </>
             )}
 
             {scenario.policy.name === 'frequency_aware' && (
               <>
-                <div className="form-group">
-                  <label className="form-label">History Length</label>
-                  <input
-                    type="number"
-                    value={(scenario.policy.params?.history_length as number) || 8}
-                    onChange={(e) => {
-                      setScenario({
-                        ...scenario,
-                        policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, history_length: parseInt(e.target.value) || 1 }
-                        }
-                      })
-                    }}
-                  />
-                </div>
-
                 <div className="form-group">
                   <label className="form-label">K (Reference Distance)</label>
                   <input
@@ -1580,19 +1634,17 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             {scenario.policy.name === 'predictive_prefetch' && (
               <>
                 <div className="form-group">
-                  <label className="form-label">Confidence Threshold (0.0 - 1.0)</label>
+                  <label className="form-label">Degree (Pages Per Trigger)</label>
                   <input
                     type="number"
-                    step={0.05}
-                    min={0.1}
-                    max={1.0}
-                    value={(scenario.policy.params?.confidence_threshold as number) || 0.75}
+                    min={1}
+                    value={(scenario.policy.params?.degree as number) || 1}
                     onChange={(e) => {
                       setScenario({
                         ...scenario,
                         policy: {
                           ...scenario.policy,
-                          params: { ...scenario.policy.params, confidence_threshold: parseFloat(e.target.value) || 0.75 }
+                          params: { ...scenario.policy.params, degree: parseInt(e.target.value) || 1 }
                         }
                       })
                     }}
@@ -1600,20 +1652,56 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Lookahead Depth (Tokens/Pages)</label>
+                  <label className="form-label">Stride (Pages)</label>
                   <input
                     type="number"
-                    value={(scenario.policy.params?.lookahead_depth as number) || 4}
+                    value={(scenario.policy.params?.stride as number) || 1}
                     onChange={(e) => {
                       setScenario({
                         ...scenario,
                         policy: {
                           ...scenario.policy,
-                          params: { ...scenario.policy.params, lookahead_depth: parseInt(e.target.value) || 1 }
+                          params: { ...scenario.policy.params, stride: parseInt(e.target.value) || 1 }
                         }
                       })
                     }}
                   />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Max In-Flight Prefetches</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={(scenario.policy.params?.max_in_flight as number) || 64}
+                    onChange={(e) => {
+                      setScenario({
+                        ...scenario,
+                        policy: {
+                          ...scenario.policy,
+                          params: { ...scenario.policy.params, max_in_flight: parseInt(e.target.value) || 1 }
+                        }
+                      })
+                    }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Issue On Hit</label>
+                  <input
+                    type="checkbox"
+                    checked={(scenario.policy.params?.on_hit as boolean) ?? true}
+                    onChange={(e) => {
+                      setScenario({
+                        ...scenario,
+                        policy: {
+                          ...scenario.policy,
+                          params: { ...scenario.policy.params, on_hit: e.target.checked }
+                        }
+                      })
+                    }}
+                  />
+                  <span className="form-help">Prefetch on cache hits as well as misses</span>
                 </div>
               </>
             )}

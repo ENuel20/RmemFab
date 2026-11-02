@@ -153,11 +153,9 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
   policy: {
     name: 'hot_cold',
     params: {
+      k: 2,
       hot_threshold: 8,
-      cold_threshold: 1,
-      tick_ns: 1000000,
-      min_residency_ns: 10000000,
-      max_migrations_per_tick: 64
+      cold_threshold: 1
     }
   },
   faults: {
@@ -177,199 +175,6 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
     format: 'jsonl',
     path: 'runs/llama-70b-cxl',
     include_event_log: true
-  }
-}
-
-export const MOE_RDMA_SCENARIO: ScenarioConfig = {
-  $schema: '../SPECS/config.schema.json',
-  version: '0.1',
-  name: 'moe-remote-tiering',
-  description: 'Eight compute nodes running a Mixtral-style MoE workload over RDMA remote memory, with a node failure and a degraded link.',
-  seed: 7,
-  duration_ns: 120000000000,
-  warmup_ns: 10000000000,
-  page_size_bytes: 2097152,
-  nodes: [
-    {
-      id: 'node-0',
-      role: 'compute',
-      local_memory: {
-        capacity_bytes: 274877906944,
-        latency_ns: 95,
-        bandwidth_bytes_per_ns: 300
-      },
-      compute: {
-        accelerator: 'A100-80GB',
-        accelerators: 8,
-        accelerator_memory_bytes: 85899345920
-      }
-    },
-    {
-      id: 'node-1',
-      role: 'compute',
-      local_memory: {
-        capacity_bytes: 274877906944,
-        latency_ns: 95,
-        bandwidth_bytes_per_ns: 300
-      },
-      compute: {
-        accelerator: 'A100-80GB',
-        accelerators: 8,
-        accelerator_memory_bytes: 85899345920
-      }
-    },
-    {
-      id: 'node-2',
-      role: 'compute',
-      local_memory: {
-        capacity_bytes: 274877906944,
-        latency_ns: 95,
-        bandwidth_bytes_per_ns: 300
-      },
-      compute: {
-        accelerator: 'A100-80GB',
-        accelerators: 8,
-        accelerator_memory_bytes: 85899345920
-      }
-    },
-    {
-      id: 'node-3',
-      role: 'compute',
-      local_memory: {
-        capacity_bytes: 274877906944,
-        latency_ns: 95,
-        bandwidth_bytes_per_ns: 300
-      },
-      compute: {
-        accelerator: 'A100-80GB',
-        accelerators: 8,
-        accelerator_memory_bytes: 85899345920
-      }
-    },
-    {
-      id: 'remote-pool',
-      role: 'memory',
-      remote_memory: {
-        capacity_bytes: 8796093022208,
-        latency_ns: 2500,
-        bandwidth_bytes_per_ns: 25
-      }
-    }
-  ],
-  fabric: {
-    links: [
-      {
-        id: 'node-0-rdma',
-        from: 'node-0',
-        to: 'remote-pool',
-        latency_ns: 2500,
-        bandwidth_bytes_per_ns: 25,
-        in_flight_bytes: 4194304,
-        queue_depth_bytes: 33554432,
-        bidirectional: true
-      },
-      {
-        id: 'node-1-rdma',
-        from: 'node-1',
-        to: 'remote-pool',
-        latency_ns: 2500,
-        bandwidth_bytes_per_ns: 25,
-        in_flight_bytes: 4194304,
-        queue_depth_bytes: 33554432,
-        bidirectional: true
-      },
-      {
-        id: 'node-2-rdma',
-        from: 'node-2',
-        to: 'remote-pool',
-        latency_ns: 2500,
-        bandwidth_bytes_per_ns: 25,
-        in_flight_bytes: 4194304,
-        queue_depth_bytes: 33554432,
-        bidirectional: true
-      },
-      {
-        id: 'node-3-rdma',
-        from: 'node-3',
-        to: 'remote-pool',
-        latency_ns: 2500,
-        bandwidth_bytes_per_ns: 25,
-        in_flight_bytes: 4194304,
-        queue_depth_bytes: 33554432,
-        bidirectional: true
-      }
-    ]
-  },
-  workload: {
-    type: 'synthetic',
-    profile: 'moe',
-    model: {
-      name: 'mixtral-8x7b',
-      family: 'mixtral',
-      layers: 32,
-      attention_heads: 32,
-      kv_heads: 8,
-      head_dim: 128,
-      dtype_bytes: 2,
-      experts: 8,
-      top_k: 2,
-      expert_size_bytes: 176160768,
-      popularity_distribution: 'zipf',
-      popularity_skew: 1.1
-    },
-    requests: {
-      arrival_rate_per_second: 4,
-      concurrency: 32,
-      prompt_tokens: 2048,
-      generated_tokens: 256,
-      phase_mix: {
-        prefill: 0.15,
-        decode: 0.85
-      }
-    }
-  },
-  policy: {
-    name: 'frequency_aware',
-    params: {
-      history_length: 8,
-      k: 2,
-      protect_fraction: 0.6,
-      migration_watermark: 0.85,
-      max_migrations_per_tick: 128
-    }
-  },
-  faults: {
-    node_failures: [
-      {
-        time_ns: 45000000000,
-        node: 'node-3',
-        repair_ns: 5000000000,
-        reason: 'simulated NIC fault'
-      }
-    ],
-    link_degradations: [
-      {
-        start_ns: 70000000000,
-        end_ns: 80000000000,
-        link: 'node-2-rdma',
-        bandwidth_factor: 0.5,
-        latency_factor: 2.0
-      }
-    ],
-    packet_loss: {
-      enabled: true,
-      ppm: 10
-    }
-  },
-  metrics: {
-    percentiles: [50, 90, 99],
-    sample_interval_ns: 200000000,
-    warmup_ns: 10000000000
-  },
-  output: {
-    format: 'parquet',
-    path: 'runs/moe-remote-tiering',
-    include_event_log: false
   }
 }
 
@@ -593,7 +398,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       explanation: 'Popular Zipf experts are kept in local DRAM. The tail 20% expert activations traverse the 2.5 µs RDMA fabric, dominating p99 tail latency.',
       suggested_policy_tuning: 'Increase protected fraction or implement speculative prefetching based on layer token routing predictions.'
     },
-    scenario_snapshot: MOE_RDMA_SCENARIO
+    scenario_snapshot: LLAMA_70B_CXL_SCENARIO
   },
   {
     id: 'run-moe-rdma-faults',
@@ -633,7 +438,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       explanation: 'At t=45s simulated NIC fault on node-3 and t=70s degradation on link node-2-rdma caused fabric queue saturation and TCP/RoCE packet loss retries.',
       suggested_policy_tuning: 'Enable fault-tolerant multi-path routing across parallel RDMA links.'
     },
-    scenario_snapshot: MOE_RDMA_SCENARIO
+    scenario_snapshot: LLAMA_70B_CXL_SCENARIO
   },
   {
     id: 'run-sparse-predictive',
@@ -679,25 +484,22 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       name: 'sparse-attention-prefetch',
       workload: {
         type: 'synthetic',
-        profile: 'sparse_attention',
+        profile: 'kv_cache_decode',
         model: {
           name: 'llama-3-70b-sparse',
           family: 'llama',
           layers: 80,
           kv_heads: 8,
           head_dim: 128
-        },
-        sparsity: {
-          window_tokens: 1024,
-          global_tokens: 128
         }
       },
       policy: {
         name: 'predictive_prefetch',
         params: {
-          confidence_threshold: 0.75,
-          lookahead_depth: 4,
-          max_inflight_prefetches: 32
+          degree: 1,
+          stride: 1,
+          max_in_flight: 64,
+          on_hit: true
         }
       }
     }

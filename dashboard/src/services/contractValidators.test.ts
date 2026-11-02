@@ -5,6 +5,12 @@ import {
   validateRunSummaryList,
   validateRunDetail,
   validateSeriesPoints,
+  validateTraceProfile,
+  validateDraftResponse,
+  validateChatResponse,
+  validateApplyResponse,
+  validateRollbackResponse,
+  validateVersionDetail,
   ContractError
 } from './contractValidators.ts'
 
@@ -99,6 +105,13 @@ test('4. validateRunDetail validates compliant RunDetail and rejects malformed s
 
   // Invalid status
   assert.throws(() => validateRunDetail({ run_id: 'run-123', status: 'bogus' }), ContractError)
+
+  // Saved scenario passes through for the Infrastructure topology view
+  const withScenario = validateRunDetail(
+    { ...validDetail, scenario: { name: 'x', nodes: [], fabric: { links: [] } } }, 'run-123')
+  assert.equal((withScenario.scenario as { name: string }).name, 'x')
+  const withoutScenario = validateRunDetail(validDetail, 'run-123')
+  assert.equal(withoutScenario.scenario, null)
 })
 
 test('5. validateSeriesPoints validates compliant series and rejects missing counters', () => {
@@ -138,3 +151,88 @@ test('5. validateSeriesPoints validates compliant series and rejects missing cou
   })
 })
 
+
+test('6. validateTraceProfile accepts full profiles, rejects missing counts', () => {
+  const full = {
+    trace_id: 'abc123', filename: 'w.jsonl', sha256: 'abc123def',
+    provenance: 'derived', limitation_note: 'geometry-derived',
+    counts: { alloc: 1, read: 2, write: 0, free: 1, migrate: 0 },
+    requests: 1, footprint_bytes: 4096, workload_path: 'traces/uploads/abc123.jsonl',
+    normalized_pages: 2,
+    validation: { errors: [], warnings: ['w'] },
+    normalization: { unit_bytes: 4096 }
+  }
+  const p = validateTraceProfile(full)
+  assert.equal(p.trace_id, 'abc123')
+  assert.equal(p.workload_path, 'traces/uploads/abc123.jsonl')
+  assert.equal(p.counts.read, 2)
+  assert.throws(() => validateTraceProfile({ ...full, counts: { alloc: 1 } }), ContractError)
+  assert.throws(() => validateTraceProfile({ trace_id: 'x' }), ContractError)
+})
+
+test('7. validateDraftResponse accepts drafts, rejects missing scenario', () => {
+  const draft = {
+    scenario: { name: 'x' }, version: 'v1', parent_version: null,
+    validation: { warnings: [], assumed: ['a'] }, model: 'm', usage: {}
+  }
+  assert.equal(validateDraftResponse(draft).version, 'v1')
+  assert.throws(() => validateDraftResponse({ ...draft, scenario: null }), ContractError)
+  assert.throws(() => validateDraftResponse({ ...draft, model: 7 }), ContractError)
+})
+
+test('8. validateChatResponse handles absent, valid, and invalid patches', () => {
+  const base = { content: 'hi', model: 'm', run_id: 'r1' }
+  assert.equal(validateChatResponse(base).suggested_patch, null)
+  const none = validateChatResponse({ ...base, suggested_patch: null })
+  assert.equal(none.suggested_patch, null)
+  const good = validateChatResponse({
+    ...base,
+    suggested_patch: {
+      ops: [{ op: 'replace', path: '/seed', value: 8 }],
+      valid: true, errors: [], warnings: [], changes: [{ path: '/seed' }]
+    }
+  })
+  assert.equal(good.suggested_patch?.valid, true)
+  assert.equal(good.suggested_patch?.ops?.length, 1)
+  const bad = validateChatResponse({
+    ...base,
+    suggested_patch: { ops: null, valid: false, errors: [{ path: '', message: 'bad' }] }
+  })
+  assert.equal(bad.suggested_patch?.valid, false)
+  assert.throws(() => validateChatResponse({
+    ...base, suggested_patch: { ops: [{ op: 'merge', path: '/x' }], valid: true, errors: [] }
+  }), ContractError)
+})
+
+test('9. validateApplyResponse and validateRollbackResponse pin shapes', () => {
+  const apply = {
+    version: 'v2', parent_version: 'v1', parent_run_id: 'r1',
+    run_id: 'r2', status: 'completed',
+    compare: { verdict: 'fair', mode: 'same_seed' },
+    validation: { warnings: [], assumed: [] },
+    changes: [{ path: '/seed' }]
+  }
+  const a = validateApplyResponse(apply)
+  assert.equal(a.compare?.verdict, 'fair')
+  assert.throws(() => validateApplyResponse({ ...apply, compare: { verdict: 'maybe' } }), ContractError)
+  const refused = validateApplyResponse({ ...apply, compare: { verdict: 'refused', reason: 'x' } })
+  assert.equal(refused.compare?.reason, 'x')
+  const rb = {
+    version: 'v3', run_id: 'r3', status: 'completed',
+    to_version: 'v1', from_version: 'v2',
+    validation: { warnings: [], assumed: [] }
+  }
+  assert.equal(validateRollbackResponse(rb).to_version, 'v1')
+  assert.throws(() => validateRollbackResponse({ ...rb, to_version: 5 }), ContractError)
+})
+
+test('10. validateVersionDetail accepts records, rejects missing scenario', () => {
+  const rec = {
+    version: 'v1', parent_version: null, note: 'n',
+    rollback_to: null, scenario: { name: 'x' }
+  }
+  const v = validateVersionDetail(rec)
+  assert.equal(v.version, 'v1')
+  assert.equal(v.note, 'n')
+  assert.throws(() => validateVersionDetail({ version: 'v1' }), ContractError)
+})

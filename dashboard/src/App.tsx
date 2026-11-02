@@ -6,11 +6,13 @@ import { ScenarioBuilderView } from './components/builder/ScenarioBuilderView'
 import { SimulationRunsView, RunDetailInspector } from './components/runs/SimulationRunsView'
 import { PolicyComparisonView } from './components/comparison/PolicyComparisonView'
 import { InfrastructureView } from './components/infrastructure/InfrastructureView'
+import { TracesView } from './components/traces/TracesView'
+import { AssistantView } from './components/assistant/AssistantView'
 import { SettingsView } from './components/settings/SettingsView'
 import { Modal } from './components/common/Modal'
 import { ToastContainer, type ToastMessage } from './components/common/Toast'
 import { apiClient } from './services/api'
-import type { SimulationRun } from './types/telemetry'
+import type { SimulationRun, TraceProfile } from './types/telemetry'
 import type { ScenarioConfig } from './types/scenario'
 import './App.css'
 
@@ -24,7 +26,8 @@ export function App() {
   ])
   const [activeScenarioName, setActiveScenarioName] = useState<string>('llama-70b-cxl')
   const [toasts, setToasts] = useState<ToastMessage[]>([])
-  const [isMockMode, setIsMockMode] = useState<boolean>(true)
+  const [isMockMode, setIsMockMode] = useState<boolean>(() => apiClient.isMockMode())
+  const [traceWorkloadSeed, setTraceWorkloadSeed] = useState<{ path: string; nonce: number } | null>(null)
 
   // Toast dispatch
   const notify = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -121,10 +124,25 @@ export function App() {
     }
   }
 
+  const refreshRuns = async () => {
+    try {
+      setRuns(await apiClient.getRuns())
+    } catch {
+      // Leave existing list in place; callers notify on failure.
+    }
+  }
+
+  const handleUseTraceInBuilder = (trace: TraceProfile) => {
+    if (!trace.workload_path) return
+    setTraceWorkloadSeed({ path: trace.workload_path, nonce: Date.now() })
+    setCurrentView('builder')
+    notify(`Builder workload set to trace ${trace.trace_id.slice(0, 12)}`, 'info')
+  }
+
   // Restore defaults
   const handleResetDefaults = async () => {
     apiClient.resetToDefaults()
-    setIsMockMode(true)
+    setIsMockMode(apiClient.isMockMode())
     try {
       const data = await apiClient.getRuns()
       setRuns(data)
@@ -168,6 +186,7 @@ export function App() {
             onNotify={notify}
             onScenarioSaved={handleScenarioSaved}
             onRunSubmitted={handleRunSubmitted}
+            traceWorkloadSeed={traceWorkloadSeed}
           />
         )}
 
@@ -194,6 +213,23 @@ export function App() {
         {currentView === 'infrastructure' && (
           <InfrastructureView
             runs={runs}
+            isMockMode={isMockMode}
+          />
+        )}
+
+        {currentView === 'traces' && (
+          <TracesView
+            onNotify={notify}
+            onUseInBuilder={handleUseTraceInBuilder}
+            isMockMode={isMockMode}
+          />
+        )}
+
+        {currentView === 'assistant' && (
+          <AssistantView
+            runs={runs}
+            onNotify={notify}
+            onRefreshRuns={() => void refreshRuns()}
             isMockMode={isMockMode}
           />
         )}
@@ -228,6 +264,8 @@ export function App() {
             run={activeRunDetail}
             onSelectForComparison={handleToggleRunComparison}
             isSelectedForComparison={selectedComparisonIds.includes(activeRunDetail.id)}
+            onNotify={notify}
+            onRunCreated={() => void refreshRuns()}
           />
         </Modal>
       )}

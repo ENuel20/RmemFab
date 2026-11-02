@@ -7,7 +7,9 @@ import {
   Network,
   Settings,
   PlusCircle,
-  Database
+  Database,
+  FileUp,
+  Bot
 } from 'lucide-react'
 
 export type NavView =
@@ -16,6 +18,8 @@ export type NavView =
   | 'runs'
   | 'comparison'
   | 'infrastructure'
+  | 'traces'
+  | 'assistant'
   | 'settings'
 
 interface SidebarProps {
@@ -63,6 +67,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'infrastructure',
       label: 'Infrastructure',
       icon: <Network size={18} className="nav-icon" />
+    },
+    {
+      id: 'traces',
+      label: 'Trace Library',
+      icon: <FileUp size={18} className="nav-icon" />
+    },
+    {
+      id: 'assistant',
+      label: 'Assistant',
+      icon: <Bot size={18} className="nav-icon" />
     },
     {
       id: 'settings',

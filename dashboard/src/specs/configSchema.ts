@@ -481,11 +481,7 @@ export const CONFIG_SCHEMA = {
         },
         "profile": {
           "enum": [
-            "kv_cache_decode",
-            "prefill",
-            "sparse_attention",
-            "moe",
-            "mixed"
+            "kv_cache_decode"
           ]
         },
         "model": {
@@ -555,8 +551,7 @@ export const CONFIG_SCHEMA = {
             "swap_remote",
             "hot_cold",
             "frequency_aware",
-            "predictive_prefetch",
-            "cost_aware"
+            "predictive_prefetch"
           ]
         },
         "params": {

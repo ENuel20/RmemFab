@@ -238,7 +238,7 @@ test('16. Three or four compatible runs → eligible', () => {
   assert.equal(res4.eligible, true)
 
   // 5 runs should be rejected due to maximum 4
-  const runE = createBaseRun('run-e', 'cost_aware')
+  const runE = createBaseRun('run-e', 'predictive_prefetch')
   const res5 = evaluateComparisonEligibility([runA, runB, runC, runD, runE])
   assert.equal(res5.eligible, false)
   assert.equal(res5.firstDifference, 'run_count')

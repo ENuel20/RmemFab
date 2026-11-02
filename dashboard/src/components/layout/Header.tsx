@@ -29,6 +29,14 @@ const VIEW_METADATA: Record<NavView, { title: string; subtitle: string }> = {
     title: 'Infrastructure Architecture',
     subtitle: 'Interactive architectural diagram of compute nodes, fabric interconnects, and disaggregated pools'
   },
+  traces: {
+    title: 'Trace Library',
+    subtitle: 'Upload canonical JSONL traces, inspect their profiles, and replay them'
+  },
+  assistant: {
+    title: 'Research Assistant',
+    subtitle: 'Telemetry-grounded answers with validated, applicable suggestions'
+  },
   settings: {
     title: 'Settings & Runtime',
     subtitle: 'Configure FastAPI Run API endpoints, toggle simulation mock telemetry, and inspect schemas'

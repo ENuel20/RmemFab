@@ -1,6 +1,8 @@
-import React, { useState } from 'react'
-import type { SimulationRun } from '../../types/telemetry'
+import React, { useEffect, useRef, useState } from 'react'
+import type { ApplyResponse, PatchOp, SimulationRun } from '../../types/telemetry'
+import { apiClient, apiErrorMessage } from '../../services/api'
 import { Badge } from '../common/Badge'
+import { Modal } from '../common/Modal'
 import {
   formatNanoseconds,
   formatBytes,
@@ -13,7 +15,9 @@ import {
   ArrowUpDown,
   ExternalLink,
   GitCompare,
-  AlertCircle
+  AlertCircle,
+  Radio,
+  FlaskConical
 } from 'lucide-react'
 import {
   AreaChart,
@@ -53,7 +57,7 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
     const matchesSearch =
       scenarioName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       run.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      run.workload_profile.toLowerCase().includes(searchQuery.toLowerCase())
+      (run.workload_profile || '').toLowerCase().includes(searchQuery.toLowerCase())
 
     const matchesPolicy = policyFilter === 'all' || run.policy_name === policyFilter
     const matchesStatus = statusFilter === 'all' || run.status === statusFilter
@@ -319,13 +323,216 @@ interface RunDetailInspectorProps {
   run: SimulationRun
   onSelectForComparison: (runId: string) => void
   isSelectedForComparison: boolean
+  onNotify?: (text: string, type: 'success' | 'error' | 'info') => void
+  onRunCreated?: (runId: string) => void
+}
+
+function formatNsShort(ns: number): string {
+  if (ns < 1000) return `${ns} ns`
+  if (ns < 1_000_000) return `${(ns / 1000).toFixed(1)} µs`
+  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(1)} ms`
+  return `${(ns / 1_000_000_000).toFixed(2)} s`
+}
+
+const StreamModal: React.FC<{ runId: string; onClose: () => void }> = ({ runId, onClose }) => {
+  const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
+  const [streamError, setStreamError] = useState<string | null>(null)
+  const [isDone, setIsDone] = useState(false)
+  const endRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const close = apiClient.openRunStream(
+      runId,
+      (ev) => setEvents((prev) => [...prev.slice(-199), ev]),
+      (err) => {
+        // A clean replay ends with [DONE] (close without error text surfaced).
+        if (err.message !== 'Stream connection closed' || events.length === 0) {
+          setStreamError(err.message)
+        }
+        setIsDone(true)
+      }
+    )
+    return close
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId])
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [events.length])
+
+  return (
+    <Modal isOpen onClose={onClose} title="Virtual-time event stream" maxWidth="760px">
+      <div className="mono" style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+        Replaying stored telemetry over virtual time — playback, not live execution.
+        {isDone && ' Stream ended.'}
+      </div>
+      {streamError && (
+        <div role="alert" style={{ fontSize: '12.5px', color: 'var(--accent-rose)', marginBottom: '10px' }}>
+          {streamError}
+        </div>
+      )}
+      <div
+        className="mono"
+        style={{
+          maxHeight: '380px', overflowY: 'auto', fontSize: '11.5px',
+          background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', padding: '10px 12px'
+        }}
+      >
+        {events.length === 0 && !streamError && <div>Waiting for events…</div>}
+        {events.map((ev, i) => (
+          <div key={i} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ color: 'var(--accent-cyan)' }}>
+              {typeof ev.time_ns === 'number' ? formatNsShort(ev.time_ns) : '?'}
+            </span>
+            {' '}{String(ev.event ?? 'event')}
+            {typeof ev.node === 'string' && ev.node ? ` @${ev.node}` : ''}
+          </div>
+        ))}
+        <div ref={endRef} />
+      </div>
+    </Modal>
+  )
+}
+
+const WhatIfModal: React.FC<{
+  run: SimulationRun
+  onClose: () => void
+  onNotify?: (text: string, type: 'success' | 'error' | 'info') => void
+  onRunCreated?: (runId: string) => void
+}> = ({ run, onClose, onNotify, onRunCreated }) => {
+  const links = run.scenario_snapshot?.fabric?.links ?? []
+  const [linkId, setLinkId] = useState<string>(links[0]?.id ?? '')
+  const [bandwidth, setBandwidth] = useState<string>(
+    links[0]?.bandwidth_bytes_per_ns !== undefined ? String(links[0].bandwidth_bytes_per_ns) : ''
+  )
+  const [note, setNote] = useState('')
+  const [isRunning, setIsRunning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<ApplyResponse | null>(null)
+
+  const handleRun = async () => {
+    const idx = links.findIndex((l) => l.id === linkId)
+    const value = Number(bandwidth)
+    if (idx < 0 || !Number.isFinite(value) || value <= 0) {
+      setError('Pick a link and a positive bandwidth (bytes/ns)')
+      return
+    }
+    setIsRunning(true)
+    setError(null)
+    setResult(null)
+    const patch: PatchOp[] = [{
+      op: 'replace', path: `/fabric/links/${idx}/bandwidth_bytes_per_ns`, value
+    }]
+    try {
+      const res = await apiClient.applyChange({
+        parent_run_id: run.id, patch, note: note.trim() || undefined
+      })
+      setResult(res)
+      onNotify?.(`What-if run ${res.run_id.slice(0, 12)} (${res.status})`, res.status === 'completed' ? 'success' : 'error')
+      onRunCreated?.(res.run_id)
+    } catch (err) {
+      setError(apiErrorMessage(err))
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} title="What-if: change link bandwidth" maxWidth="560px">
+      {links.length === 0 ? (
+        <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '12px 0' }}>
+          No link data on this run — what-if needs the saved scenario (live runs only).
+        </div>
+      ) : (
+        <>
+          <div className="form-grid-2">
+            <div className="form-group">
+              <label className="form-label" htmlFor="whatif-link">Link</label>
+              <select
+                id="whatif-link"
+                value={linkId}
+                onChange={(e) => {
+                  setLinkId(e.target.value)
+                  const l = links.find((x) => x.id === e.target.value)
+                  if (l?.bandwidth_bytes_per_ns !== undefined) setBandwidth(String(l.bandwidth_bytes_per_ns))
+                }}
+                disabled={isRunning}
+              >
+                {links.map((l) => (
+                  <option key={l.id} value={l.id}>{l.id}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="whatif-bw">Bandwidth (bytes/ns)</label>
+              <input
+                id="whatif-bw"
+                type="number"
+                min={0.001}
+                step="any"
+                value={bandwidth}
+                onChange={(e) => setBandwidth(e.target.value)}
+                disabled={isRunning}
+                autoComplete="off"
+              />
+            </div>
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label className="form-label" htmlFor="whatif-note">Note (optional)</label>
+              <input
+                id="whatif-note"
+                type="text"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Recorded on the new version"
+                disabled={isRunning}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+          <div className="mono" style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+            Creates a new version (bandwidth only, everything else pinned), runs it, and compares fairly.
+          </div>
+          {error && (
+            <div role="alert" style={{ fontSize: '12.5px', color: 'var(--accent-rose)', marginBottom: '10px' }}>
+              {error}
+            </div>
+          )}
+          {result && (
+            <div className="mono" style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+              Version {result.version} · run {result.run_id.slice(0, 16)} · {result.status}
+              {result.compare && (
+                <> · Compare: {result.compare.verdict}
+                  {result.compare.verdict === 'refused' ? ` (${result.compare.reason})` : ''}
+                </>
+              )}
+              {result.error && <> · {result.error}</>}
+            </div>
+          )}
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => void handleRun()}
+            disabled={isRunning}
+          >
+            <FlaskConical size={13} />
+            <span>{isRunning ? 'Running…' : 'Run what-if'}</span>
+          </button>
+        </>
+      )}
+    </Modal>
+  )
 }
 
 export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
   run,
   onSelectForComparison,
-  isSelectedForComparison
+  isSelectedForComparison,
+  onNotify,
+  onRunCreated
 }) => {
+  const [showStream, setShowStream] = useState(false)
+  const [showWhatIf, setShowWhatIf] = useState(false)
+  const degraded = run.degraded
+  const hasFaults = !!degraded && (degraded.windows.length > 0 || degraded.loss_events > 0 || degraded.stalled_requests > 0)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Provenance Banner */}
@@ -506,8 +713,80 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
         </div>
       )}
 
+      {hasFaults && degraded && (
+        <div
+          style={{
+            padding: '16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--bg-card-secondary)',
+            border: '1px solid var(--border-card)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+            <Badge variant="amber">DEGRADED RUN</Badge>
+            <span className="mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              {degraded.windows.length} window{degraded.windows.length === 1 ? '' : 's'}
+              {' '}· {degraded.stalled_requests} stalled requests
+              {' '}· {degraded.loss_events} lost transfers ({degraded.retransmissions} retries)
+            </span>
+          </div>
+          {degraded.windows.length > 0 && (
+            <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '4px 8px 4px 0' }}>Type</th>
+                  <th style={{ padding: '4px 8px 4px 0' }}>Target</th>
+                  <th style={{ padding: '4px 8px 4px 0' }}>Window</th>
+                  <th style={{ padding: '4px 8px 4px 0' }}>Effect</th>
+                </tr>
+              </thead>
+              <tbody className="mono" style={{ fontSize: '11.5px' }}>
+                {degraded.windows.map((w, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: '4px 8px 4px 0' }}>{w.type}</td>
+                    <td style={{ padding: '4px 8px 4px 0' }}>{w.target}</td>
+                    <td style={{ padding: '4px 8px 4px 0' }}>
+                      {formatNsShort(w.start_ns)} → {w.end_ns === null ? 'run end' : formatNsShort(w.end_ns)}
+                    </td>
+                    <td style={{ padding: '4px 8px 4px 0' }}>
+                      {w.type === 'link_degradation'
+                        ? `×${w.bandwidth_factor} bw, ×${w.latency_factor} lat`
+                        : (w.reason || 'outage')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {(degraded.stalled_transfers > 0 || degraded.retransmit_bytes > 0) && (
+            <div className="mono" style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '8px' }}>
+              {degraded.stalled_transfers} stalled transfers ({formatBytes(degraded.stalled_bytes)}) ·{' '}
+              {formatBytes(degraded.retransmit_bytes)} retransmitted ({formatNsShort(Math.round(degraded.retransmit_delay_ns))} RTO delay)
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Action Footer in Inspector */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+        {!run.is_demo && (
+          <>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowStream(true)}
+            >
+              <Radio size={14} />
+              <span>Stream events</span>
+            </button>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowWhatIf(true)}
+            >
+              <FlaskConical size={14} />
+              <span>What-if</span>
+            </button>
+          </>
+        )}
         <button
           className={`btn ${isSelectedForComparison ? 'btn-secondary' : 'btn-primary'}`}
           onClick={() => onSelectForComparison(run.id)}
@@ -516,6 +795,18 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
           <span>{isSelectedForComparison ? 'Remove from Comparison' : 'Add to Policy Comparison'}</span>
         </button>
       </div>
+
+      {showStream && (
+        <StreamModal runId={run.id} onClose={() => setShowStream(false)} />
+      )}
+      {showWhatIf && (
+        <WhatIfModal
+          run={run}
+          onClose={() => setShowWhatIf(false)}
+          onNotify={onNotify}
+          onRunCreated={onRunCreated}
+        />
+      )}
     </div>
   )
 }

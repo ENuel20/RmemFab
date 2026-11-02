@@ -3,7 +3,7 @@
  * Directly aligned with PRODUCT-SPEC §4 and backend API contract (docs/API.md)
  */
 
-import type { PolicyName, WorkloadProfile, ScenarioConfig } from './scenario'
+import type { PolicyName, ScenarioConfig } from './scenario'
 
 export type RunStatus = 'completed' | 'running' | 'failed'
 
@@ -89,6 +89,7 @@ export interface RunDetail {
   status: 'completed' | 'failed'
   summary: Record<string, unknown> | null
   manifest: Record<string, unknown> | null
+  scenario?: ScenarioConfig | null
   error: string | null
 }
 
@@ -97,6 +98,7 @@ export interface SeriesPoint {
   accesses: number
   evictions: number
   completed: number
+  degraded?: number
   local_used_pages: Record<string, number>
   pool_used_pages: number
   pools_used_pages?: Record<string, number>
@@ -158,6 +160,7 @@ export interface TraceProfile {
   }
   requests: number
   footprint_bytes?: number
+  workload_path?: string
   normalized_pages: number
   validation: {
     errors: string[]
@@ -201,6 +204,7 @@ export interface TimeSeriesPoint {
   pool_used_pages?: number
   pools_used_pages?: Record<string, number>
   link_bytes?: Record<string, number>
+  degraded?: number
   local_occupancy_bytes?: number | null
   remote_occupancy_bytes?: number | null
   p50_latency_ns?: number | null
@@ -223,7 +227,7 @@ export interface SimulationRun {
   id: string
   scenario_name: string | null
   scenario_hash: string | null
-  workload_profile?: WorkloadProfile | null
+  workload_profile?: string | null
   policy_name: PolicyName | string
   policy_display_name: string
   seed: number | null
@@ -233,6 +237,7 @@ export interface SimulationRun {
   metrics: MetricSummary
   time_series: TimeSeriesPoint[]
   bottleneck: BottleneckAnalysis | null
+  degraded?: DegradedSummary | null
   scenario_snapshot?: ScenarioConfig | null
   engine_version?: string | null
   trace_hash?: string | null
@@ -301,6 +306,7 @@ interface EngineSummary {
   rmemfab_version?: string
   created_at?: string
   policy?: { requested?: string; effective?: string; fallback_reason?: string }
+  degraded?: unknown
 }
 
 interface EngineManifest {
@@ -394,6 +400,7 @@ export function adaptRunSummaryToSimulationRun(
       pool_used_pages: sp.pool_used_pages,
       pools_used_pages: sp.pools_used_pages,
       link_bytes: sp.link_bytes,
+      degraded: typeof sp.degraded === 'number' ? sp.degraded : 0,
       local_occupancy_bytes: localOccupancy,
       remote_occupancy_bytes: remoteOccupancy
       // Per-window latency and summary utilization are intentionally omitted
@@ -418,7 +425,7 @@ export function adaptRunSummaryToSimulationRun(
     id: summary.run_id,
     scenario_name: scenarioName,
     scenario_hash: scenarioHash,
-    workload_profile: (sum?.workload_label as WorkloadProfile) || null,
+    workload_profile: (typeof sum?.workload_label === 'string' ? sum.workload_label : null),
     policy_name: effectivePolicy,
     policy_display_name: isDemo ? `[Demo] ${effectivePolicy}` : effectivePolicy,
     seed,
@@ -445,6 +452,140 @@ export function adaptRunSummaryToSimulationRun(
     },
     time_series: timeSeries,
     bottleneck: null, // Engine does not produce heuristic bottleneck assertions
+    degraded: parseDegraded(sum?.degraded),
     scenario_snapshot: scenarioSnapshot
   }
+}
+
+function parseDegraded(raw: unknown): DegradedSummary | null {
+  if (!raw || typeof raw !== 'object') return null
+  const d = raw as Record<string, unknown>
+  if (!Array.isArray(d.windows)) return null
+  const num = (v: unknown): number => (typeof v === 'number' ? v : 0)
+  return {
+    windows: (d.windows as unknown[]).map((w) => {
+      const o = (w && typeof w === 'object' ? w : {}) as Record<string, unknown>
+      return {
+        type: String(o.type ?? ''),
+        target: String(o.target ?? ''),
+        start_ns: num(o.start_ns),
+        end_ns: typeof o.end_ns === 'number' ? o.end_ns : null,
+        reason: typeof o.reason === 'string' ? o.reason : null,
+        bandwidth_factor: typeof o.bandwidth_factor === 'number' ? o.bandwidth_factor : null,
+        latency_factor: typeof o.latency_factor === 'number' ? o.latency_factor : null
+      }
+    }),
+    stalled_requests: num(d.stalled_requests),
+    loss_events: num(d.loss_events),
+    retransmissions: num(d.retransmissions),
+    retransmit_bytes: num(d.retransmit_bytes),
+    retransmit_delay_ns: num(d.retransmit_delay_ns),
+    stalled_transfers: num(d.stalled_transfers),
+    stalled_bytes: num(d.stalled_bytes)
+  }
+}
+
+// --- Assistant, versions, faults (mirror docs/API.md) ---
+
+export interface FaultWindow {
+  type: string
+  target: string
+  start_ns: number
+  end_ns: number | null
+  reason: string | null
+  bandwidth_factor: number | null
+  latency_factor: number | null
+}
+
+export interface DegradedSummary {
+  windows: FaultWindow[]
+  stalled_requests: number
+  loss_events: number
+  retransmissions: number
+  retransmit_bytes: number
+  retransmit_delay_ns: number
+  stalled_transfers: number
+  stalled_bytes: number
+}
+
+export interface PatchOp {
+  op: 'add' | 'remove' | 'replace'
+  path: string
+  value?: unknown
+}
+
+export interface SplitError {
+  path: string
+  message: string
+}
+
+export interface DraftResponse {
+  scenario: ScenarioConfig
+  version: string
+  parent_version: string | null
+  validation: { warnings: string[]; assumed: string[] }
+  model: string
+  usage: Record<string, unknown>
+}
+
+export interface ChatMessage {
+  role: string
+  content: string
+}
+
+export interface SuggestedPatch {
+  ops: PatchOp[] | null
+  valid: boolean
+  errors: SplitError[]
+  warnings?: string[]
+  changes?: Array<{ path: string; before?: unknown; after?: unknown }>
+}
+
+export interface ChatResponse {
+  content: string
+  model: string
+  run_id: string | null
+  suggested_patch?: SuggestedPatch | null
+}
+
+export interface ApplyCompare {
+  verdict: 'fair' | 'refused'
+  reason?: string
+  mode?: string
+  [key: string]: unknown
+}
+
+export interface ApplyResponse {
+  version: string
+  parent_version: string | null
+  parent_run_id: string | null
+  run_id: string
+  status: string
+  compare: ApplyCompare | null
+  validation: { warnings: string[]; assumed: string[] }
+  changes?: Array<{ path: string; before?: unknown; after?: unknown }>
+  model?: string
+  usage?: Record<string, unknown>
+  error?: string
+}
+
+export interface RollbackResponse {
+  version: string
+  run_id: string
+  status: string
+  to_version: string
+  from_version: string | null
+  validation: { warnings: string[]; assumed: string[] }
+  error?: string
+}
+
+export interface VersionDetail {
+  version: string
+  parent_version: string | null
+  parent_run_id?: string | null
+  rollback_to?: string | null
+  note?: string | null
+  instruction?: string | null
+  model?: string | null
+  scenario: ScenarioConfig
 }

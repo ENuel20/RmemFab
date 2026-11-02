@@ -328,6 +328,9 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
         name = (traces.traces / f"{trace_id}.name").read_text(
             encoding="utf-8")
         prof = trace_profile(trace_id, name, vt)
+        # Server-side path for workload.path: uploads resolve relative to the
+        # server CWD by default, absolute when the server was given one.
+        prof["workload_path"] = path.as_posix()
         (traces.traces / f"{trace_id}.profile.json").write_text(
             json.dumps(prof, indent=2, sort_keys=True), encoding="utf-8")
         return prof

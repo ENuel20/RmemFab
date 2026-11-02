@@ -3,12 +3,7 @@
  * Strictly aligned with SPECS/config.schema.json (Draft 2020-12)
  */
 
-export type WorkloadProfile =
-  | 'kv_cache_decode'
-  | 'prefill'
-  | 'sparse_attention'
-  | 'moe'
-  | 'mixed'
+export type WorkloadProfile = 'kv_cache_decode'
 
 export type PolicyName =
   | 'local_only'
@@ -16,7 +11,6 @@ export type PolicyName =
   | 'hot_cold'
   | 'frequency_aware'
   | 'predictive_prefetch'
-  | 'cost_aware'
 
 export type ProvenanceKind = 'measured' | 'sourced' | 'assumed'
 

@@ -21,7 +21,6 @@ out/
 
 # Simulation artifacts
 /runs/
-!dashboard/src/components/runs/
 *.jsonl
 *.parquet
 *.duckdb

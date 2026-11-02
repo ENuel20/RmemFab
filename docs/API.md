@@ -162,6 +162,9 @@ layout.
   footprint_bytes?, normalized_pages, validation{errors[],warnings[]},
   normalization{…}}`. `provenance` is `measured|derived|synthetic|calibrated`
   when the trace declares it, else null — never guess it client-side.
+  `workload_path` is the server-side path to put in `workload.path` when
+  building a trace scenario from the upload (relative to the server CWD
+  by default).
 
 ### `POST /scenarios/draft` → `{scenario, version, validation, model, usage}`
 
