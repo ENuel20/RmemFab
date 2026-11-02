@@ -20,7 +20,8 @@ out/
 *.tsbuildinfo
 
 # Simulation artifacts
-runs/
+/runs/
+!dashboard/src/components/runs/
 *.jsonl
 *.parquet
 *.duckdb
