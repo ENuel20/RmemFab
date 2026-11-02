@@ -67,13 +67,21 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   // Benchmark run for time-series display
   const primaryRun = runs.find((r) => r.id === 'run-llama-cxl-hotcold') || runs[0]
 
-  // Memory tier distribution data
-  const tierDistributionData = [
-    { name: 'node-0', localDramGb: 512, remotePoolGb: 1024, acceleratorHbmGb: 80 },
-    { name: 'node-1', localDramGb: 512, remotePoolGb: 1024, acceleratorHbmGb: 80 },
-    { name: 'node-2', localDramGb: 512, remotePoolGb: 1024, acceleratorHbmGb: 80 },
-    { name: 'node-3', localDramGb: 512, remotePoolGb: 1024, acceleratorHbmGb: 80 }
-  ]
+  // Memory tier distribution data derived from authentic scenario snapshot
+  const tierDistributionData = primaryRun?.scenario_snapshot?.nodes
+    ? primaryRun.scenario_snapshot.nodes.map((n) => ({
+        name: n.id,
+        localDramGb: n.local_memory?.capacity_bytes
+          ? parseFloat((n.local_memory.capacity_bytes / (1024 ** 3)).toFixed(1))
+          : 0,
+        remotePoolGb: n.remote_memory?.capacity_bytes
+          ? parseFloat((n.remote_memory.capacity_bytes / (1024 ** 3)).toFixed(1))
+          : 0,
+        acceleratorHbmGb: n.compute?.accelerator_memory_bytes
+          ? parseFloat((n.compute.accelerator_memory_bytes / (1024 ** 3)).toFixed(1))
+          : 0
+      }))
+    : []
 
   return (
     <div className="app-content">
@@ -272,23 +280,33 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 Local DRAM vs CXL Pooled Storage per Node (GiB)
               </div>
             </div>
-            <Badge variant="teal">4-Node CXL</Badge>
+            <Badge variant="teal">
+              {primaryRun?.scenario_snapshot?.name || 'Selected Topology'}
+            </Badge>
           </div>
 
           <div className="chart-container-inner">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={tierDistributionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} unit=" GiB" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                />
-                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                <Bar dataKey="localDramGb" name="Local DRAM" stackId="a" fill="#0ea5e9" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="remotePoolGb" name="Remote CXL Pool" stackId="a" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {tierDistributionData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={tierDistributionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                  <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                  <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} unit=" GiB" />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Bar dataKey="localDramGb" name="Local DRAM" stackId="a" fill="#0ea5e9" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="remotePoolGb" name="Remote CXL Pool" stackId="a" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: '100%', minHeight: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)', padding: '24px', textAlign: 'center' }}>
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '420px', lineHeight: 1.5 }}>
+                  Memory tier allocations are unavailable for this run.
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

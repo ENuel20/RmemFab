@@ -1,5 +1,6 @@
-import React from 'react'
-import type { SimulationRun } from '../../types/telemetry'
+import React, { useState, useEffect } from 'react'
+import type { SimulationRun, ComparisonVerdict } from '../../types/telemetry'
+import { apiClient } from '../../services/api'
 import { Badge } from '../common/Badge'
 import {
   formatNanoseconds,
@@ -45,18 +46,76 @@ interface PolicyComparisonViewProps {
   selectedRunIds: string[]
   onToggleRunSelection: (runId: string) => void
   onSelectBenchmarkPair: () => void
+  isMockMode?: boolean
 }
 
 export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
   runs,
   selectedRunIds,
   onToggleRunSelection,
-  onSelectBenchmarkPair
+  onSelectBenchmarkPair,
+  isMockMode = true
 }) => {
+  const [isComparingLive, setIsComparingLive] = useState<boolean>(false)
+  const [backendVerdict, setBackendVerdict] = useState<ComparisonVerdict | null>(null)
+
+  const activeBackendVerdict = isMockMode || selectedRunIds.length < 2 || selectedRunIds.length > 4 ? null : backendVerdict
+
+  // In LIVE mode, query authoritative POST /runs/compare
+  useEffect(() => {
+    if (isMockMode || selectedRunIds.length < 2 || selectedRunIds.length > 4) {
+      return
+    }
+
+    let ignore = false
+    const fetchComparison = async () => {
+      setIsComparingLive(true)
+      try {
+        const verdict = await apiClient.compareRuns(selectedRunIds)
+        if (!ignore) {
+          setBackendVerdict(verdict)
+        }
+      } catch (err) {
+        if (!ignore) {
+          setBackendVerdict({
+            verdict: 'refused',
+            reason: err instanceof Error ? err.message : 'Server refused comparison request'
+          })
+        }
+      } finally {
+        if (!ignore) {
+          setIsComparingLive(false)
+        }
+      }
+    }
+
+    void fetchComparison()
+
+    return () => {
+      ignore = true
+    }
+  }, [selectedRunIds, isMockMode])
   const selectedRuns = runs.filter((r) => selectedRunIds.includes(r.id))
 
-  // Run the strict comparison eligibility guard
+  // Client-side guard (authoritative for Demo Mode, informational fallback)
   const guardResult = evaluateComparisonEligibility(selectedRuns)
+
+  // In LIVE mode, the server POST /runs/compare verdict is the sole authority
+  const isEligible = isMockMode
+    ? guardResult.eligible
+    : (activeBackendVerdict?.verdict === 'fair')
+
+  const isRefused = isMockMode
+    ? !guardResult.eligible
+    : (activeBackendVerdict?.verdict === 'refused')
+
+  const refusalReason = isMockMode
+    ? guardResult.reason
+    : (activeBackendVerdict?.verdict === 'refused' ? activeBackendVerdict.reason : guardResult.reason)
+
+  const isSingleSeed = isMockMode
+    ? guardResult.isSingleSeed
+    : (activeBackendVerdict?.verdict === 'fair' && activeBackendVerdict.mode === 'same_seed')
 
   // Comparative chart data (only calculated when eligible, preserving nulls)
   const { latencyData, hitRatioData, trafficData } = prepareComparisonChartData(selectedRuns)
@@ -145,8 +204,15 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
         </div>
       )}
 
+      {/* Loading state for Live Comparison */}
+      {!isMockMode && isComparingLive && (
+        <div className="card" style={{ textAlign: 'center', padding: '36px 20px', backgroundColor: 'var(--bg-card-secondary)' }}>
+          <span style={{ fontSize: '13px', color: 'var(--accent-cyan)' }}>Evaluating comparison guard with server (POST /runs/compare)...</span>
+        </div>
+      )}
+
       {/* Case 3: 2-4 runs selected, but Comparison Guard REFUSES comparison */}
-      {selectedRuns.length >= 2 && selectedRuns.length <= 4 && !guardResult.eligible && (
+      {selectedRuns.length >= 2 && selectedRuns.length <= 4 && !isComparingLive && isRefused && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Refusal Notice Banner */}
           <div
@@ -178,7 +244,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                   <Badge variant="rose">COMPARISON REFUSED</Badge>
                 </div>
                 <p style={{ fontSize: '13px', color: 'var(--text-primary)', margin: '8px 0 4px 0', fontWeight: 500 }}>
-                  {guardResult.reason}
+                  {refusalReason}
                 </p>
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
                   Per project specifications (<code>docs/POLICIES.md</code>): <em>&ldquo;If the guard cannot prove sameness, it refuses rather than warning.&rdquo;</em> A valid scientific comparison holds all controlled variables constant (hardware, workload parameters, trace content hash, seed, duration, warmup, page size, metric percentiles, engine version), varying ONLY the memory tiering policy.
@@ -250,8 +316,8 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
         </div>
       )}
 
-      {/* Case 4: 2-4 runs selected AND guardResult.eligible === true */}
-      {selectedRuns.length >= 2 && selectedRuns.length <= 4 && guardResult.eligible && (
+      {/* Case 4: 2-4 runs selected AND comparison is eligible/fair */}
+      {selectedRuns.length >= 2 && selectedRuns.length <= 4 && !isComparingLive && isEligible && (
         <>
           {/* Scientific Validation Guarantee Banner */}
           <div
@@ -275,9 +341,9 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
                   Scientifically Fair Benchmark (All Controlled Variables Matched)
                 </span>
                 {/* Single-seed directional label required by specification */}
-                {guardResult.isSingleSeed && (
+                {isSingleSeed && (
                   <Badge variant="cyan">
-                    directional — single seed
+                    directional: single seed, no spread estimate
                   </Badge>
                 )}
               </div>
@@ -288,7 +354,7 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
             </div>
 
             {/* Note regarding directional single seed */}
-            {guardResult.isSingleSeed && (
+            {isSingleSeed && (
               <div
                 style={{
                   display: 'flex',

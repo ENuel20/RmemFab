@@ -9,7 +9,6 @@ import type {
   SimulationRun,
   KpiMetric,
   RunSummary,
-  RunDetail,
   SeriesPoint,
   EventsResponse,
   ComparisonVerdict,
@@ -19,6 +18,11 @@ import type {
 import { adaptRunSummaryToSimulationRun } from '../types/telemetry'
 import { MOCK_SIMULATION_RUNS, LLAMA_70B_CXL_SCENARIO } from './mockData'
 import { validateScenario } from '../utils/validation'
+import {
+  validateRunSummaryList,
+  validateRunDetail,
+  validateSeriesPoints
+} from './contractValidators'
 
 export type { ValidateResponse } from '../types/telemetry'
 
@@ -186,20 +190,9 @@ class RmemFabApiClient {
         errorMsg = res.statusText || errorMsg
       }
 
-      return {
-        valid: false,
-        errors: [{ path: 'root', message: `Server validation request failed: ${errorMsg}` }],
-        warnings: [],
-        assumed: []
-      }
+      throw new Error(`FastAPI validation request rejected (${this.baseUrl}/scenarios/validate): ${errorMsg}`)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Network error'
-      return {
-        valid: false,
-        errors: [{ path: 'root', message: `Cannot reach validation endpoint: ${msg}` }],
-        warnings: [],
-        assumed: []
-      }
+      throw new Error(`Cannot reach FastAPI validation endpoint at ${this.baseUrl}/scenarios/validate: ${err instanceof Error ? err.message : 'Connection refused'}`, { cause: err })
     }
   }
 
@@ -224,11 +217,9 @@ class RmemFabApiClient {
             throw new Error(`FastAPI /runs returned malformed non-JSON data: ${jsonErr instanceof Error ? jsonErr.message : 'Parse error'}`, { cause: jsonErr })
           }
 
-          if (Array.isArray(liveData)) {
-            // Live data returns RunSummary[]
-            return liveData.map((row: RunSummary) => adaptRunSummaryToSimulationRun(row, null, null))
-          }
-          throw new Error('FastAPI /runs returned an unexpected non-array response')
+          // Authoritatively validate runtime response contract against docs/API.md
+          const validatedSummaries = validateRunSummaryList(liveData)
+          return validatedSummaries.map((row) => adaptRunSummaryToSimulationRun(row, null, null))
         }
         throw new Error(`FastAPI responded with HTTP ${res.status}: ${res.statusText || 'Failed to fetch runs'}`)
       } catch (err) {
@@ -259,7 +250,8 @@ class RmemFabApiClient {
         if (detailRes.status === 404) return undefined
         throw new Error(`Failed to fetch run ${id}: HTTP ${detailRes.status}`)
       }
-      const detail = (await detailRes.json()) as RunDetail
+      const rawDetail = await detailRes.json()
+      const detail = validateRunDetail(rawDetail, id)
 
       // Also attempt to fetch series downsampled
       let series: SeriesPoint[] = []
@@ -268,7 +260,8 @@ class RmemFabApiClient {
           signal: AbortSignal.timeout(4000)
         })
         if (seriesRes.ok) {
-          series = (await seriesRes.json()) as SeriesPoint[]
+          const rawSeries = await seriesRes.json()
+          series = validateSeriesPoints(rawSeries, id)
         }
       } catch {
         // Series optional / summary-only
@@ -316,7 +309,8 @@ class RmemFabApiClient {
       signal: AbortSignal.timeout(4000)
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-    return (await res.json()) as SeriesPoint[]
+    const rawSeries = await res.json()
+    return validateSeriesPoints(rawSeries, id)
   }
 
   /**

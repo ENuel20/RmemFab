@@ -1,17 +1,73 @@
 import React, { useState } from 'react'
+import type { SimulationRun } from '../../types/telemetry'
 import {
   Network,
   Database,
   Layers,
   ArrowRightLeft,
   Server,
-  HardDrive
+  HardDrive,
+  AlertTriangle
 } from 'lucide-react'
 import { Badge } from '../common/Badge'
+import { deriveTopologySummary } from './topologyHelpers'
+import {
+  formatBytes,
+  formatNanoseconds,
+  formatBandwidth,
+  formatPercent
+} from '../../utils/formatters'
 
-export const InfrastructureView: React.FC = () => {
-  const [selectedTopology, setSelectedTopology] = useState<'cxl' | 'rdma'>('cxl')
+interface InfrastructureViewProps {
+  runs?: SimulationRun[]
+  selectedRunId?: string
+  isMockMode?: boolean
+}
+
+export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
+  runs = [],
+  selectedRunId: initialRunId,
+  isMockMode = true
+}) => {
+  const [selectedRunId, setSelectedRunId] = useState<string>(() => {
+    if (initialRunId) return initialRunId
+    return runs[0]?.id || ''
+  })
   const [hoveredLink, setHoveredLink] = useState<string | null>(null)
+
+  const currentRun = runs.find((r) => r.id === selectedRunId) || runs[0]
+  const scenario = currentRun?.scenario_snapshot
+
+  // Empty state: no runs available
+  if (!currentRun || runs.length === 0) {
+    return (
+      <div className="app-content">
+        <div
+          className="card"
+          style={{
+            textAlign: 'center',
+            padding: '48px 24px',
+            backgroundColor: 'var(--bg-card-secondary)',
+            borderStyle: 'dashed'
+          }}
+        >
+          <Network size={36} color="var(--accent-cyan)" style={{ margin: '0 auto 12px auto' }} />
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+            No Simulation Run or Scenario Selected
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto' }}>
+            Run a simulation or load an experiment to inspect its hardware topology, nodes, memory tiers, and link bandwidth.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const topology = deriveTopologySummary(scenario, currentRun?.metrics)
+  const computeNodes = topology.computeNodes
+  const memoryPoolNodes = topology.memoryPoolNodes
+  const links = topology.links
+  const fabricSwitch = scenario?.fabric?.switch
 
   return (
     <div className="app-content">
@@ -22,303 +78,382 @@ export const InfrastructureView: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Network size={16} color="var(--accent-cyan)" />
               <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Simulated Remote-Memory Hardware Topology
+                Data-Driven Remote-Memory Hardware Topology
               </h3>
-              <Badge variant="cyan">ARCHITECTURAL MODEL</Badge>
+              <Badge variant={isMockMode ? 'amber' : 'emerald'}>
+                {isMockMode ? 'Demo Dataset' : 'Live Engine'}
+              </Badge>
             </div>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Analytical model of compute host caches, fabric interconnects, and disaggregated memory
+              Hardware topology, memory tiers, and interconnect properties derived strictly from scenario definition
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Topology Preset:</span>
-            <button
-              className={`btn btn-sm ${selectedTopology === 'cxl' ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setSelectedTopology('cxl')}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Select Run:</span>
+            <select
+              value={currentRun.id}
+              onChange={(e) => setSelectedRunId(e.target.value)}
+              style={{
+                backgroundColor: 'var(--bg-input)',
+                borderColor: 'var(--border-subtle)',
+                color: 'var(--text-primary)',
+                fontSize: '12px',
+                padding: '6px 10px',
+                borderRadius: 'var(--radius-sm)'
+              }}
             >
-              4-Node CXL 2.0 Pooled (Llama-70B)
-            </button>
-            <button
-              className={`btn btn-sm ${selectedTopology === 'rdma' ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setSelectedTopology('rdma')}
-            >
-              8-Node RDMA RoCE (MoE Cluster)
-            </button>
+              {runs.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.scenario_name || r.id} ({r.policy_name})
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
 
-      {/* SVG & Card Architectural Visualization Canvas */}
-      <div
-        className="card"
-        style={{
-          padding: '32px 24px',
-          backgroundColor: 'var(--bg-card)',
-          position: 'relative',
-          overflow: 'hidden'
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Badge variant={selectedTopology === 'cxl' ? 'teal' : 'violet'}>
-              {selectedTopology === 'cxl' ? 'CXL.mem Point-to-Point' : 'RDMA / RoCEv2 Fabric'}
-            </Badge>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              {selectedTopology === 'cxl'
-                ? '4x H100-80GB Nodes &bull; 48 GB/s CXL 2.0 Links &bull; 180ns Access Latency'
-                : '8x A100-80GB Nodes &bull; 25 GB/s RDMA Links &bull; 2,500ns Access Latency'}
-            </span>
-          </div>
-
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            Hover over links to view simulated bandwidth & latency characteristics
-          </div>
-        </div>
-
-        {/* Diagram Layout */}
+      {/* Scenario Unavailable Warning */}
+      {!scenario && (
         <div
+          className="card"
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '16px',
-            marginBottom: '40px'
+            textAlign: 'center',
+            padding: '36px 24px',
+            backgroundColor: 'var(--bg-card-secondary)',
+            borderStyle: 'dashed'
           }}
         >
-          {/* Compute Nodes */}
-          {(selectedTopology === 'cxl' ? [0, 1, 2, 3] : [0, 1, 2, 3, 4, 5, 6, 7]).map((nodeIdx) => {
-            const nodeId = `node-${nodeIdx}`
-            const linkId = selectedTopology === 'cxl' ? `${nodeId}-cxl` : `${nodeId}-rdma`
-            const isHovered = hoveredLink === linkId
+          <AlertTriangle size={32} color="var(--accent-amber)" style={{ margin: '0 auto 12px auto' }} />
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+            Scenario Hardware Definition Unavailable for {currentRun.id}
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto' }}>
+            The simulation engine manifest did not bundle an authentic scenario configuration for this run. Hardware topology cannot be fabricated.
+          </p>
+        </div>
+      )}
 
-            return (
-              <div
-                key={nodeId}
-                onMouseEnter={() => setHoveredLink(linkId)}
-                onMouseLeave={() => setHoveredLink(null)}
-                style={{
-                  padding: '16px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: 'var(--bg-card-secondary)',
-                  border: isHovered ? '1px solid var(--accent-cyan)' : '1px solid var(--border-card)',
-                  transition: 'all 0.15s ease',
-                  boxShadow: isHovered ? '0 4px 16px rgba(6, 182, 212, 0.2)' : 'none'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Server size={14} color="var(--accent-cyan)" />
-                    <span className="mono" style={{ fontWeight: 600 }}>{nodeId}</span>
-                  </div>
-                  <Badge variant="cyan">COMPUTE</Badge>
-                </div>
+      {/* Data-Driven Architectural Visualization */}
+      {scenario && (
+        <div
+          className="card"
+          style={{
+            padding: '24px',
+            backgroundColor: 'var(--bg-card)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}
+        >
+          {/* Topology Metadata Bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Badge variant="teal">
+                {scenario.name || currentRun.scenario_name || 'Scenario Fabric'}
+              </Badge>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {computeNodes.length} Compute Host{computeNodes.length !== 1 ? 's' : ''} &bull; {memoryPoolNodes.length} Disaggregated Memory Pool{memoryPoolNodes.length !== 1 ? 's' : ''} &bull; {links.length} Interconnect Link{links.length !== 1 ? 's' : ''}
+              </span>
+            </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                  <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Accelerator: </span>
-                    <strong style={{ color: 'var(--text-primary)' }}>
-                      {selectedTopology === 'cxl' ? '8x H100 (80GB)' : '8x A100 (80GB)'}
-                    </strong>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Local DRAM: </span>
-                    <strong style={{ color: 'var(--text-primary)' }}>
-                      {selectedTopology === 'cxl' ? '512 GiB DDR5' : '256 GiB DDR4'}
-                    </strong>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Local Latency / BW: </span>
-                    <span>{selectedTopology === 'cxl' ? '90 ns / 400 GB/s' : '95 ns / 300 GB/s'}</span>
-                  </div>
-                </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', color: 'var(--text-muted)' }}>
+              <span>Seed: <strong style={{ color: 'var(--text-primary)' }}>{scenario.seed ?? currentRun.seed ?? '—'}</strong></span>
+              <span>Page Size: <strong style={{ color: 'var(--text-primary)' }}>{scenario.page_size_bytes ? formatBytes(scenario.page_size_bytes) : '—'}</strong></span>
+              <span>
+                Fabric Util: <strong style={{ color: currentRun.metrics.fabric_utilization != null ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                  {currentRun.metrics.fabric_utilization != null ? formatPercent(currentRun.metrics.fabric_utilization) : 'Unavailable'}
+                </strong>
+              </span>
+            </div>
+          </div>
 
+          {/* Compute Nodes Grid */}
+          <div style={{ marginBottom: '24px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>
+              COMPUTE HOSTS ({computeNodes.length})
+            </span>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: '14px'
+              }}
+            >
+              {computeNodes.map((node) => (
                 <div
+                  key={node.id}
                   style={{
-                    marginTop: '12px',
-                    padding: '6px 8px',
-                    borderRadius: 'var(--radius-sm)',
-                    backgroundColor: 'var(--bg-input)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontSize: '10px'
+                    padding: '16px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--bg-card-secondary)',
+                    border: '1px solid var(--border-card)'
                   }}
                 >
-                  <span style={{ color: 'var(--accent-teal)' }}>{linkId}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>
-                    {selectedTopology === 'cxl' ? '48 GB/s &bull; 180ns' : '25 GB/s &bull; 2.5µs'}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Server size={14} color="var(--accent-cyan)" />
+                      <span className="mono" style={{ fontWeight: 600 }}>{node.id}</span>
+                    </div>
+                    <Badge variant="cyan">COMPUTE</Badge>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Accelerator: </span>
+                      <strong style={{ color: 'var(--text-primary)' }}>
+                        {node.compute?.accelerator ? `${node.compute.accelerators || 1}x ${node.compute.accelerator}` : 'None'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Local DRAM: </span>
+                      <strong style={{ color: 'var(--text-primary)' }}>
+                        {node.local_memory?.capacity_bytes ? formatBytes(node.local_memory.capacity_bytes) : 'Unavailable'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Local Latency / BW: </span>
+                      <span>
+                        {node.local_memory?.latency_ns != null ? formatNanoseconds(node.local_memory.latency_ns) : '—'} / {node.local_memory?.bandwidth_bytes_per_ns != null ? formatBandwidth(node.local_memory.bandwidth_bytes_per_ns) : '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Local Hit Ratio: </span>
+                      <strong style={{ color: currentRun.metrics.local_hit_ratio != null ? 'var(--accent-teal)' : 'var(--text-muted)' }}>
+                        {currentRun.metrics.local_hit_ratio != null ? formatPercent(currentRun.metrics.local_hit_ratio) : 'Unavailable'}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Fabric Interconnect Hub / Switch */}
+          {fabricSwitch && (
+            <div
+              style={{
+                margin: '0 auto 24px auto',
+                maxWidth: '680px',
+                padding: '14px 20px',
+                borderRadius: 'var(--radius-lg)',
+                background: 'linear-gradient(90deg, rgba(6, 182, 212, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)',
+                border: '1px solid var(--border-card)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--bg-card)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--accent-cyan)'
+                  }}
+                >
+                  <ArrowRightLeft size={16} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                    Switch Interconnect Fabric
+                  </h4>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Bisection Bandwidth: {formatBandwidth(fabricSwitch.bandwidth_bytes_per_ns)} &bull; Latency: {formatNanoseconds(fabricSwitch.latency_ns)}
                   </span>
                 </div>
               </div>
-            )
-          })}
-        </div>
+              <Badge variant="teal">SWITCH</Badge>
+            </div>
+          )}
 
-        {/* Fabric Interconnect Hub / Switch */}
-        <div
-          style={{
-            margin: '0 auto 40px auto',
-            maxWidth: '680px',
-            padding: '16px 24px',
-            borderRadius: 'var(--radius-lg)',
-            background: 'linear-gradient(90deg, rgba(6, 182, 212, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)',
-            border: '1px solid var(--border-hover)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Remote Disaggregated Memory Pools Grid */}
+          <div style={{ marginBottom: '24px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>
+              DISAGGREGATED MEMORY POOLS ({memoryPoolNodes.length})
+            </span>
             <div
               style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--bg-card)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--accent-cyan)'
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                gap: '14px'
               }}
             >
-              <ArrowRightLeft size={18} />
-            </div>
-            <div>
-              <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {selectedTopology === 'cxl' ? 'CXL 2.0 Pooled Switch Fabric' : '200Gb RoCEv2 Network Fabric'}
-              </h4>
-              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                {selectedTopology === 'cxl'
-                  ? 'PCIe Gen5 x16 PHY &bull; Coherent CXL.mem protocol &bull; 64 MB FIFO link queues'
-                  : 'InfiniBand / RoCEv2 &bull; Hardware offloaded RDMA read/write &bull; 32 MB buffers'}
-              </span>
-            </div>
-          </div>
-
-          <Badge variant="teal">BIDIRECTIONAL</Badge>
-        </div>
-
-        {/* Remote Disaggregated Memory Pool */}
-        <div
-          style={{
-            margin: '0 auto',
-            maxWidth: '560px',
-            padding: '20px 24px',
-            borderRadius: 'var(--radius-lg)',
-            backgroundColor: 'var(--bg-card-secondary)',
-            border: '1px solid rgba(139, 92, 246, 0.4)',
-            boxShadow: '0 4px 20px rgba(139, 92, 246, 0.15)'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Database size={18} color="var(--accent-violet)" />
-              <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                remote-pool (Disaggregated Memory Tier)
-              </span>
-            </div>
-            <Badge variant="violet">REMOTE TIER</Badge>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', textAlign: 'center' }}>
-            <div style={{ padding: '8px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TOTAL CAPACITY</span>
-              <p className="tabular-nums" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent-violet)', marginTop: '2px' }}>
-                {selectedTopology === 'cxl' ? '4.4 TB' : '8.8 TB'}
-              </p>
-            </div>
-            <div style={{ padding: '8px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>ACCESS LATENCY</span>
-              <p className="tabular-nums" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
-                {selectedTopology === 'cxl' ? '180 ns' : '2,500 ns'}
-              </p>
-            </div>
-            <div style={{ padding: '8px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TIER BANDWIDTH</span>
-              <p className="tabular-nums" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent-cyan)', marginTop: '2px' }}>
-                {selectedTopology === 'cxl' ? '48 GB/s' : '25 GB/s'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Hardware Tier Specification Matrix */}
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title-group">
-            <div className="card-title">
-              <Layers size={16} color="var(--accent-cyan)" />
-              <span>Hardware Tier Comparison & Physical Media Characteristics</span>
-            </div>
-            <div className="card-subtitle">
-              Discrete-event analytical timing parameters modeled in RmemFab core
-            </div>
-          </div>
-        </div>
-
-        <div className="table-responsive">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Tier / Layer</th>
-                <th>Physical Media</th>
-                <th>Access Latency</th>
-                <th>Per-Link Bandwidth</th>
-                <th>Address Model</th>
-                <th>Cost Index</th>
-                <th>Simulation Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <HardDrive size={13} color="var(--accent-cyan)" />
-                    <strong>Local DRAM</strong>
+              {memoryPoolNodes.map((pool) => (
+                <div
+                  key={pool.id}
+                  style={{
+                    padding: '16px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--bg-card-secondary)',
+                    border: '1px solid rgba(139, 92, 246, 0.3)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Database size={16} color="var(--accent-violet)" />
+                      <span className="mono" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{pool.id}</span>
+                    </div>
+                    <Badge variant="violet">REMOTE TIER</Badge>
                   </div>
-                </td>
-                <td>DDR5-5600 Registered ECC</td>
-                <td className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>90 ns</td>
-                <td className="tabular-nums">400 GB/s</td>
-                <td>Direct physical address translation</td>
-                <td>1.0x (Baseline)</td>
-                <td><Badge variant="emerald">Simulated</Badge></td>
-              </tr>
 
-              <tr>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Database size={13} color="var(--accent-teal)" />
-                    <strong>CXL Pooled Memory</strong>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}>
+                    <div style={{ padding: '6px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
+                      <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>CAPACITY</span>
+                      <p className="tabular-nums" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--accent-violet)', marginTop: '2px' }}>
+                        {pool.remote_memory?.capacity_bytes ? formatBytes(pool.remote_memory.capacity_bytes) : 'Unavailable'}
+                      </p>
+                    </div>
+                    <div style={{ padding: '6px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
+                      <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>LATENCY</span>
+                      <p className="tabular-nums" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
+                        {pool.remote_memory?.latency_ns != null ? formatNanoseconds(pool.remote_memory.latency_ns) : '—'}
+                      </p>
+                    </div>
+                    <div style={{ padding: '6px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
+                      <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>BANDWIDTH</span>
+                      <p className="tabular-nums" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--accent-cyan)', marginTop: '2px' }}>
+                        {pool.remote_memory?.bandwidth_bytes_per_ns != null ? formatBandwidth(pool.remote_memory.bandwidth_bytes_per_ns) : '—'}
+                      </p>
+                    </div>
                   </div>
-                </td>
-                <td>CXL 2.0 Type-3 Device (DDR5)</td>
-                <td className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-teal)' }}>180 ns</td>
-                <td className="tabular-nums">48 GB/s (PCIe Gen5 x16)</td>
-                <td>Abstract page IDs over CXL.mem</td>
-                <td>0.45x per GiB</td>
-                <td><Badge variant="emerald">Simulated</Badge></td>
-              </tr>
+                </div>
+              ))}
+            </div>
+          </div>
 
-              <tr>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Network size={13} color="var(--accent-violet)" />
-                    <strong>RDMA Far Memory</strong>
+          {/* Fabric Links List */}
+          <div>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>
+              CONFIGURED FABRIC LINKS ({links.length})
+            </span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
+              {links.map((link) => {
+                const isHovered = hoveredLink === link.id
+                return (
+                  <div
+                    key={link.id}
+                    onMouseEnter={() => setHoveredLink(link.id)}
+                    onMouseLeave={() => setHoveredLink(null)}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: isHovered ? 'rgba(6, 182, 212, 0.08)' : 'var(--bg-input)',
+                      border: isHovered ? '1px solid var(--accent-cyan)' : '1px solid var(--border-card)',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-teal)' }}>
+                        {link.id}
+                      </span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                        {link.bidirectional ? 'Bidirectional' : 'Unidirectional'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      <span>{link.from} &rarr; {link.to}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      <span>BW: {formatBandwidth(link.bandwidth_bytes_per_ns)}</span>
+                      <span>Lat: {formatNanoseconds(link.latency_ns)}</span>
+                    </div>
                   </div>
-                </td>
-                <td>Disaggregated RoCEv2 Appliance</td>
-                <td className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-violet)' }}>2,500 ns</td>
-                <td className="tabular-nums">25 GB/s (200Gb NIC)</td>
-                <td>Async two-sided / one-sided RDMA</td>
-                <td>0.20x per GiB</td>
-                <td><Badge variant="emerald">Simulated</Badge></td>
-              </tr>
-            </tbody>
-          </table>
+                )
+              })}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Dynamic Hardware Tiers Table */}
+      {scenario && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title-group">
+              <div className="card-title">
+                <Layers size={16} color="var(--accent-cyan)" />
+                <span>Configured Hardware Memory Tiers</span>
+              </div>
+              <div className="card-subtitle">
+                Exact timing and capacity values configured in {scenario.name || currentRun.id}
+              </div>
+            </div>
+          </div>
+
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Tier / Entity</th>
+                  <th>Node / Component</th>
+                  <th>Capacity</th>
+                  <th>Access Latency</th>
+                  <th>Bandwidth</th>
+                  <th>Provenance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {computeNodes.map((cn) => (
+                  <tr key={cn.id + '-dram'}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <HardDrive size={13} color="var(--accent-cyan)" />
+                        <strong>Local DRAM</strong>
+                      </div>
+                    </td>
+                    <td className="mono">{cn.id}</td>
+                    <td className="tabular-nums">
+                      {cn.local_memory?.capacity_bytes ? formatBytes(cn.local_memory.capacity_bytes) : '—'}
+                    </td>
+                    <td className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>
+                      {cn.local_memory?.latency_ns != null ? formatNanoseconds(cn.local_memory.latency_ns) : '—'}
+                    </td>
+                    <td className="tabular-nums">
+                      {cn.local_memory?.bandwidth_bytes_per_ns != null ? formatBandwidth(cn.local_memory.bandwidth_bytes_per_ns) : '—'}
+                    </td>
+                    <td>
+                      <Badge variant={cn.local_memory?.provenance?.kind ? 'cyan' : 'amber'}>
+                        {cn.local_memory?.provenance?.kind || 'Unspecified'}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+
+                {memoryPoolNodes.map((mp) => (
+                  <tr key={mp.id + '-pool'}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Database size={13} color="var(--accent-violet)" />
+                        <strong>Remote Memory Pool</strong>
+                      </div>
+                    </td>
+                    <td className="mono">{mp.id}</td>
+                    <td className="tabular-nums">
+                      {mp.remote_memory?.capacity_bytes ? formatBytes(mp.remote_memory.capacity_bytes) : '—'}
+                    </td>
+                    <td className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-violet)' }}>
+                      {mp.remote_memory?.latency_ns != null ? formatNanoseconds(mp.remote_memory.latency_ns) : '—'}
+                    </td>
+                    <td className="tabular-nums">
+                      {mp.remote_memory?.bandwidth_bytes_per_ns != null ? formatBandwidth(mp.remote_memory.bandwidth_bytes_per_ns) : '—'}
+                    </td>
+                    <td>
+                      <Badge variant={mp.remote_memory?.provenance?.kind ? 'cyan' : 'amber'}>
+                        {mp.remote_memory?.provenance?.kind || 'Unspecified'}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

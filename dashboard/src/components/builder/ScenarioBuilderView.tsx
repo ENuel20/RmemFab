@@ -4,7 +4,9 @@ import type {
   WorkloadProfile,
   PolicyName,
   NodeConfig,
-  FabricLinkConfig
+  FabricLinkConfig,
+  ProvenanceConfig,
+  ProvenanceKind
 } from '../../types/scenario'
 import { LLAMA_70B_CXL_SCENARIO, MOE_RDMA_SCENARIO } from '../../services/mockData'
 import { apiClient, type ValidateResponse } from '../../services/api'
@@ -35,6 +37,110 @@ interface ScenarioBuilderViewProps {
   onRunSubmitted?: (runId: string) => void
 }
 
+interface ProvenanceEditorProps {
+  label: string
+  value?: ProvenanceConfig
+  onChange: (updated: ProvenanceConfig | undefined) => void
+}
+
+const ProvenanceEditor: React.FC<ProvenanceEditorProps> = ({ label, value, onChange }) => {
+  const handleKindChange = (kind: string) => {
+    if (!kind) {
+      onChange(undefined)
+      return
+    }
+    onChange({
+      kind: kind as ProvenanceKind,
+      ...(value?.source ? { source: value.source } : {}),
+      ...(value?.method ? { method: value.method } : {}),
+      ...(value?.date ? { date: value.date } : {})
+    })
+  }
+
+  const updateField = (field: 'source' | 'method' | 'date', val: string) => {
+    const trimmed = val.trim()
+    const currentKind = value?.kind || 'assumed'
+    const updated: ProvenanceConfig = {
+      kind: currentKind,
+      ...(value?.source && field !== 'source' ? { source: value.source } : {}),
+      ...(value?.method && field !== 'method' ? { method: value.method } : {}),
+      ...(value?.date && field !== 'date' ? { date: value.date } : {})
+    }
+    if (trimmed.length > 0) {
+      updated[field] = trimmed
+    }
+    onChange(updated)
+  }
+
+  return (
+    <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--border-card)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          {label}
+        </span>
+        {value ? (
+          <Badge variant={value.kind === 'measured' ? 'emerald' : value.kind === 'sourced' ? 'cyan' : 'amber'}>
+            {value.kind.toUpperCase()}
+          </Badge>
+        ) : (
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Not configured</span>
+        )}
+      </div>
+
+      <div className="form-grid-2">
+        <div className="form-group" style={{ marginBottom: '6px' }}>
+          <label className="form-label" style={{ fontSize: '11px' }}>Provenance Kind</label>
+          <select
+            value={value?.kind || ''}
+            onChange={(e) => handleKindChange(e.target.value)}
+            style={{ fontSize: '12px', padding: '4px 8px' }}
+          >
+            <option value="">None (Omit)</option>
+            <option value="measured">Measured (Target Hardware)</option>
+            <option value="sourced">Sourced (Datasheet / Spec / Paper)</option>
+            <option value="assumed">Assumed (Exploration Baseline)</option>
+          </select>
+        </div>
+
+        {value && (
+          <>
+            <div className="form-group" style={{ marginBottom: '6px' }}>
+              <label className="form-label" style={{ fontSize: '11px' }}>Date (ISO, e.g. YYYY-MM-DD)</label>
+              <input
+                type="text"
+                placeholder="2026-10-28"
+                value={value.date || ''}
+                onChange={(e) => updateField('date', e.target.value)}
+                style={{ fontSize: '12px', padding: '4px 8px' }}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: '6px', gridColumn: 'span 2' }}>
+              <label className="form-label" style={{ fontSize: '11px' }}>Source Citation</label>
+              <input
+                type="text"
+                placeholder="e.g. Micron DDR5-4800 Spec Sheet / AWS H100 MLC microbenchmark"
+                value={value.source || ''}
+                onChange={(e) => updateField('source', e.target.value)}
+                style={{ fontSize: '12px', padding: '4px 8px' }}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: '6px', gridColumn: 'span 2' }}>
+              <label className="form-label" style={{ fontSize: '11px' }}>Methodology</label>
+              <input
+                type="text"
+                placeholder="e.g. Memory Latency Checker v3.10 with 8 threads"
+                value={value.method || ''}
+                onChange={(e) => updateField('method', e.target.value)}
+                style={{ fontSize: '12px', padding: '4px 8px' }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 type BuilderTab = 'general' | 'infrastructure' | 'workload' | 'policy' | 'review'
 
 export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
@@ -49,22 +155,25 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [serverValidation, setServerValidation] = useState<ValidateResponse | null>(null)
+  const [validationSource, setValidationSource] = useState<'mock' | 'live' | null>(null)
   const [isValidatingServer, setIsValidatingServer] = useState<boolean>(false)
 
-  // Authoritative server validation: POST /scenarios/validate
+  // Server / Local Demo validation
   const handleValidateServer = async () => {
     setIsValidatingServer(true)
+    const isMock = apiClient.isMockMode()
+    setValidationSource(isMock ? 'mock' : 'live')
     try {
       const res = await apiClient.validateScenarioBackend(scenario)
       setServerValidation(res)
       if (res.valid) {
-        onNotify('Authoritative server validation passed!', 'success')
+        onNotify(isMock ? 'Local demo schema validation passed!' : 'Authoritative server validation passed!', 'success')
       } else {
-        onNotify(`Server validation detected ${res.errors.length} issue(s).`, 'error')
+        onNotify(`${isMock ? 'Local demo' : 'Server'} validation detected ${res.errors.length} issue(s).`, 'error')
       }
     } catch (err) {
       onNotify(
-        `Server validation failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        `Validation failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
         'error'
       )
     } finally {
@@ -435,7 +544,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
               className="btn btn-sm btn-outline"
               onClick={handleValidateServer}
               disabled={isValidatingServer}
-              title="Run authoritative server validation (POST /scenarios/validate)"
+              title={apiClient.isMockMode() ? "Run local schema validation against SPECS/config.schema.json" : "Run authoritative server validation (POST /scenarios/validate)"}
             >
               {isValidatingServer ? (
                 <>
@@ -445,7 +554,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
               ) : (
                 <>
                   <CheckCircle2 size={13} color="var(--accent-teal)" />
-                  <span>Validate (Server)</span>
+                  <span>{apiClient.isMockMode() ? 'Validate (Local Demo)' : 'Validate (Server)'}</span>
                 </>
               )}
             </button>
@@ -490,7 +599,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
         </div>
       </div>
 
-      {/* Server Validation Feedback Notice (POST /scenarios/validate) */}
+      {/* Server / Local Demo Validation Feedback Notice */}
       {serverValidation && (
         <div
           className="card"
@@ -504,14 +613,19 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             padding: '16px 20px'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: serverValidation.valid ? 'var(--accent-emerald)' : 'var(--accent-rose)', fontWeight: 600 }}>
-              {serverValidation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-              <span>
-                {serverValidation.valid
-                  ? 'Server Validation Passed (POST /scenarios/validate)'
-                  : 'Server Validation Issues (POST /scenarios/validate)'}
-              </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: serverValidation.valid ? 'var(--accent-emerald)' : 'var(--accent-rose)', fontWeight: 600 }}>
+                {serverValidation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                <span>
+                  {validationSource === 'live'
+                    ? 'Authoritative Server Validation Report (POST /scenarios/validate)'
+                    : 'Local Demo Validation Report (SPECS/config.schema.json)'}
+                </span>
+              </div>
+              <Badge variant={validationSource === 'live' ? 'teal' : 'amber'}>
+                {validationSource === 'live' ? 'LIVE BACKEND' : 'DEMO MODE (OFFLINE)'}
+              </Badge>
             </div>
             <button
               className="btn btn-sm btn-outline"
@@ -520,6 +634,12 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             >
               Dismiss
             </button>
+          </div>
+
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+            {validationSource === 'live'
+              ? 'Verified directly by FastAPI backend via POST /scenarios/validate.'
+              : 'This validation was performed locally against SPECS/config.schema.json. Live backend server was not contacted.'}
           </div>
 
           {serverValidation.errors.length > 0 && (
@@ -829,6 +949,24 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                             }}
                           />
                         </div>
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <ProvenanceEditor
+                            label="Local Memory Tier Provenance"
+                            value={node.local_memory.provenance}
+                            onChange={(prov) => {
+                              const updated = [...scenario.nodes]
+                              if (updated[index].local_memory) {
+                                if (prov) {
+                                  updated[index].local_memory.provenance = prov
+                                } else {
+                                  delete updated[index].local_memory.provenance
+                                }
+                                setScenario({ ...scenario, nodes: updated })
+                                validateCurrent({ ...scenario, nodes: updated })
+                              }
+                            }}
+                          />
+                        </div>
                       </>
                     )}
 
@@ -877,6 +1015,24 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                               if (updated[index].remote_memory) {
                                 updated[index].remote_memory.bandwidth_bytes_per_ns = parseFloat(e.target.value) || 0
                                 setScenario({ ...scenario, nodes: updated })
+                              }
+                            }}
+                          />
+                        </div>
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <ProvenanceEditor
+                            label="Remote Pool Memory Tier Provenance"
+                            value={node.remote_memory.provenance}
+                            onChange={(prov) => {
+                              const updated = [...scenario.nodes]
+                              if (updated[index].remote_memory) {
+                                if (prov) {
+                                  updated[index].remote_memory.provenance = prov
+                                } else {
+                                  delete updated[index].remote_memory.provenance
+                                }
+                                setScenario({ ...scenario, nodes: updated })
+                                validateCurrent({ ...scenario, nodes: updated })
                               }
                             }}
                           />
@@ -1024,6 +1180,22 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                       <span className="form-hint">
                         {((link.queue_depth_bytes || 0) / (1024 ** 2)).toFixed(1)} MiB FIFO buffer
                       </span>
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <ProvenanceEditor
+                        label="Fabric Interconnect Link Provenance"
+                        value={link.provenance}
+                        onChange={(prov) => {
+                          const updated = [...scenario.fabric.links]
+                          if (prov) {
+                            updated[index].provenance = prov
+                          } else {
+                            delete updated[index].provenance
+                          }
+                          setScenario({ ...scenario, fabric: { links: updated } })
+                          validateCurrent({ ...scenario, fabric: { links: updated } })
+                        }}
+                      />
                     </div>
                   </div>
                 </div>

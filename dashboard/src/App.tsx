@@ -187,10 +187,16 @@ export function App() {
             selectedRunIds={selectedComparisonIds}
             onToggleRunSelection={handleToggleRunComparison}
             onSelectBenchmarkPair={handleSelectBenchmarkPair}
+            isMockMode={isMockMode}
           />
         )}
 
-        {currentView === 'infrastructure' && <InfrastructureView />}
+        {currentView === 'infrastructure' && (
+          <InfrastructureView
+            runs={runs}
+            isMockMode={isMockMode}
+          />
+        )}
 
         {currentView === 'settings' && (
           <SettingsView
