@@ -204,6 +204,10 @@ class Engine:
         self.m_all, self.m_ss = Metrics(), Metrics()
         self.req_hist = Histogram()
         self.req_hist_all = Histogram()
+        self.ttft_hist = Histogram()
+        self.ttft_hist_all = Histogram()
+        self.compute_ns_prefill = 0.0
+        self.compute_ns_decode = 0.0
         self.arrived = self.completed = self.rejected = 0
         self.stalled_requests = 0
         self.completed_ss = 0
@@ -653,6 +657,13 @@ class Engine:
                 wrote_any = True
         if wrote_any:
             self._bump(now, r.node, "stall_ns", max(finish - now - ideal, 0.0))
+        # Serialized compute bound: prefill compute runs after memory service
+        # with no overlap. Unset tokens_per_second means memory-only.
+        ctps = r.node.spec.compute_tokens_per_second
+        if ctps:
+            cns = self.prompt / ctps * 1e9
+            finish += cns
+            self.compute_ns_prefill += cns
         self.sched.schedule(int(math.ceil(finish)), "prefill_end", (r, int(now)))
         return True
 
@@ -818,12 +829,22 @@ class Engine:
             wlats = np.concatenate(write_parts)
             n_wr = len(write_parts)
             self._record_writes(now, node, wlats, pages=n_wr, nbytes=write_bytes)
+        ctps = r.node.spec.compute_tokens_per_second
+        if ctps:
+            cns = 1.0 / ctps * 1e9
+            finish += cns
+            self.compute_ns_decode += cns
         step_ns = finish - now
         self._record_step(now, step_ns)
         self._emit("decode_step", now, node.id, r.id, token_index=r.tokens_done, pages=n_tot,
                    pages_remote=k_r_tot, step_ns=int(math.ceil(finish)) - int(now))
         r.tokens_done += 1
         end = int(math.ceil(finish))
+        if r.tokens_done == 1:
+            # First-token boundary: queue + prefill + first decode step.
+            self.ttft_hist_all.add_one(float(end - r.arrival))
+            if end >= self.sc.warmup_ns:
+                self.ttft_hist.add_one(float(end - r.arrival))
         if r.tokens_done < self.gen:
             self.sched.schedule(end, "decode", r)
         else:
@@ -1056,6 +1077,18 @@ class Engine:
                          "throughput_per_s": self.completed_ss / (steady / 1e9),
                          "tokens_per_s": self.tokens_ss / (steady / 1e9)},
             "decode_step_latency_ns": ss.step_hist.stats(pct),
+            "serving": {"ttft_ns": self.ttft_hist.stats(pct),
+                        "ttft_all_ns": self.ttft_hist_all.stats(pct),
+                        "tpot_ns": ss.step_hist.mean(),
+                        "itl_ns": ss.step_hist.stats(pct),
+                        "compute_ns": self.compute_ns_prefill + self.compute_ns_decode,
+                        "compute_prefill_ns": self.compute_ns_prefill,
+                        "compute_decode_ns": self.compute_ns_decode,
+                        "compute_note": ("Serialized bound: prefill compute "
+                                         "(prompt_tokens/tokens_per_second) and decode compute "
+                                         "(1/tokens_per_second per token) are added after memory "
+                                         "service with no overlap; 0 when "
+                                         "compute.tokens_per_second is unset.")},
             "access": {"count": c["reads"], "latency_ns": ss.read_hist.stats(pct),
                        "latency_all_ns": self.m_all.read_hist.stats(pct),
                        "local_hits": c["read_local"], "remote_hits": c["read_remote"],
@@ -1128,6 +1161,11 @@ class Engine:
         notes.append("Placement is single-owner N-tier: pages migrate between node locals and "
                      "pools over static shortest-path routes; there is no page sharing or "
                      "coherence protocol.")
+        if any(n.compute_tokens_per_second for n in sc.nodes):
+            notes.append("Compute: serialized service time from compute.tokens_per_second "
+                         "(prompt/tps at prefill, 1/tps per decode token), added after "
+                         "memory service with no overlap; memory-bandwidth changes cannot "
+                         "move the compute term.")
         if self.faults is not None:
             notes.append("Faults: degradation rescales link bandwidth exactly at window edges; "
                          "transfers issued inside a window use degraded latency.")

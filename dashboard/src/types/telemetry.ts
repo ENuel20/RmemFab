@@ -239,6 +239,7 @@ export interface SimulationRun {
   bottleneck: BottleneckAnalysis | null
   degraded?: DegradedSummary | null
   scenario_snapshot?: ScenarioConfig | null
+  serving?: ServingTelemetry | null
   engine_version?: string | null
   trace_hash?: string | null
   percentile_interpolation?: string | null
@@ -264,6 +265,23 @@ interface EngineLatency {
   p99?: number
   mean?: number
   max?: number
+  min?: number
+  count?: number
+}
+
+interface EngineServing {
+  ttft_ns?: EngineLatency
+  ttft_all_ns?: EngineLatency
+  tpot_ns?: number
+  itl_ns?: EngineLatency
+  compute_ns?: number
+  compute_prefill_ns?: number
+  compute_decode_ns?: number
+}
+
+interface EngineRequests {
+  latency_ns?: EngineLatency
+  completed?: number
 }
 
 interface EngineAccess {
@@ -302,6 +320,8 @@ interface EngineSummary {
   links?: Record<string, EngineLink>
   workload?: EngineWorkload
   workload_label?: string
+  serving?: EngineServing
+  requests?: EngineRequests
   time?: { virtual_time_ns?: number }
   rmemfab_version?: string
   created_at?: string
@@ -421,6 +441,28 @@ export function adaptRunSummaryToSimulationRun(
   const rawScenario = (detail as unknown as Record<string, unknown> | undefined)?.scenario
   const scenarioSnapshot: ScenarioConfig | null = rawScenario && typeof rawScenario === 'object' ? (rawScenario as ScenarioConfig) : null
 
+  // 8. Serving telemetry: TTFT/TPOT/ITL/compute from the serving section.
+  // Null unless the run was produced by a compute-aware engine run; runs
+  // produced before the serving section existed stay null, never zero-filled.
+  const num = (v: unknown): number | null => (typeof v === 'number' && !Number.isNaN(v) ? v : null)
+  const sv = sum?.serving
+  const serving: ServingTelemetry | null = sv && typeof sv === 'object' ? {
+    ttft_p50: num(sv.ttft_ns?.p50),
+    ttft_p95: num(sv.ttft_ns?.p95),
+    ttft_p99: num(sv.ttft_ns?.p99),
+    ttft_mean: num(sv.ttft_ns?.mean),
+    ttft_count: num(sv.ttft_ns?.count),
+    tpot_ns: num(sv.tpot_ns),
+    itl_p50: num(sv.itl_ns?.p50),
+    itl_p95: num(sv.itl_ns?.p95),
+    itl_p99: num(sv.itl_ns?.p99),
+    compute_ns: num(sv.compute_ns),
+    compute_prefill_ns: num(sv.compute_prefill_ns),
+    compute_decode_ns: num(sv.compute_decode_ns),
+    request_latency_mean: num(sum?.requests?.latency_ns?.mean),
+    request_latency_count: num(sum?.requests?.latency_ns?.count)
+  } : null
+
   return {
     id: summary.run_id,
     scenario_name: scenarioName,
@@ -453,8 +495,26 @@ export function adaptRunSummaryToSimulationRun(
     time_series: timeSeries,
     bottleneck: null, // Engine does not produce heuristic bottleneck assertions
     degraded: parseDegraded(sum?.degraded),
-    scenario_snapshot: scenarioSnapshot
+    scenario_snapshot: scenarioSnapshot,
+    serving
   }
+}
+
+export interface ServingTelemetry {
+  ttft_p50: number | null
+  ttft_p95: number | null
+  ttft_p99: number | null
+  ttft_mean: number | null
+  ttft_count: number | null
+  tpot_ns: number | null
+  itl_p50: number | null
+  itl_p95: number | null
+  itl_p99: number | null
+  compute_ns: number | null
+  compute_prefill_ns: number | null
+  compute_decode_ns: number | null
+  request_latency_mean: number | null
+  request_latency_count: number | null
 }
 
 function parseDegraded(raw: unknown): DegradedSummary | null {

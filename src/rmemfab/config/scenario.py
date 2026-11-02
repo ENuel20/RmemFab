@@ -77,6 +77,7 @@ class TierSpec:
 class NodeSpec:
     id: str
     local: TierSpec
+    compute_tokens_per_second: float | None = None
 
 
 @dataclass
@@ -219,7 +220,9 @@ def _build_fabric(raw, errors):
     nodes, pools = [], {}
     for n in raw["nodes"]:
         if n["role"] == "compute":
-            nodes.append(NodeSpec(n["id"], _tier(n["local_memory"])))
+            tps = (n.get("compute") or {}).get("tokens_per_second")
+            nodes.append(NodeSpec(n["id"], _tier(n["local_memory"]),
+                                  compute_tokens_per_second=float(tps) if tps else None))
         elif "remote_memory" in n:
             pools[n["id"]] = PoolSpec(n["id"], _tier(n["remote_memory"]))
     fab = raw["fabric"]

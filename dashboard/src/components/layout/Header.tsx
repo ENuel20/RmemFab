@@ -37,6 +37,10 @@ const VIEW_METADATA: Record<NavView, { title: string; subtitle: string }> = {
     title: 'Research Assistant',
     subtitle: 'Telemetry-grounded answers with validated, applicable suggestions'
   },
+  serving: {
+    title: 'Serving Telemetry',
+    subtitle: 'TTFT, token pacing, and compute-vs-memory time from event boundaries'
+  },
   settings: {
     title: 'Settings & Runtime',
     subtitle: 'Configure FastAPI Run API endpoints, toggle simulation mock telemetry, and inspect schemas'
