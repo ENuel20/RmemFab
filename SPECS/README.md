@@ -57,4 +57,4 @@ Two scenarios that differ only in formatting must hash identically.
 
 ## Example scenarios
 
-[`../examples/llama-70b-cxl.json`](../examples/llama-70b-cxl.json) and [`../examples/moe-remote-tiering.json`](../examples/moe-remote-tiering.json) are normative examples: they must validate against the schemas in this directory.
+[`../examples/llama-70b-cxl.json`](../examples/llama-70b-cxl.json) and [`../examples/eight-node-rdma-pool.json`](../examples/eight-node-rdma-pool.json) are normative examples: they must validate against the schemas in this directory.

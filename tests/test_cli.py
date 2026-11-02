@@ -35,9 +35,13 @@ class TestCli(unittest.TestCase):
     def test_summary_missing_dir(self):
         self.assertEqual(main(["summary", tempfile.mkdtemp()]), 1)
 
-    def test_run_rejects_unrunnable(self):
-        self.assertEqual(main(["run", str(REPO / "examples" / "moe-remote-tiering.json"),
-                               "--out", tempfile.mkdtemp(), "--quiet"]), 1)
+    def test_run_eight_node_example(self):
+        out = tempfile.mkdtemp()
+        self.assertEqual(main(["run", str(REPO / "examples" / "eight-node-rdma-pool.json"),
+                               "--out", out, "--quiet", "--no-events"]), 0)
+        s = json.loads((Path(out) / "summary.json").read_text(encoding="utf-8"))
+        self.assertEqual(s["scenario"], "eight-node-rdma-pool")
+        self.assertGreater(s["traffic"]["remote_read_bytes"], 0)
 
 
 if __name__ == "__main__":

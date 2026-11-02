@@ -1,0 +1,47 @@
+{
+  "concurrencies": [
+    1,
+    4,
+    16
+  ],
+  "converter": "tools/baseten_log_to_trace.py",
+  "counts": {
+    "pages": 7372,
+    "request_errors": 0,
+    "requests": 72,
+    "trace_rows": 22116
+  },
+  "created_at": "2026-11-01T15:22:47+00:00",
+  "derivation_geometry": {
+    "dtype_bytes": 2,
+    "head_dim": 128,
+    "kv_bytes_per_token": 65536,
+    "kv_heads": 8,
+    "layers": 32,
+    "note": "assumed derivation parameters, not the served model's geometry"
+  },
+  "files": {
+    "kv_trace.jsonl": "061a9f7e33b46f46b978f9f48f1b1b5a8f93f554c0932102c3367bc6f14441a3",
+    "raw.jsonl": "79d7785157defc7669b677ba64ea8c9c89253d7e02f41d0f36a6f1eaa9115927"
+  },
+  "limitation_note": "request-level capture (arrival/TTFT/latency/tokens per request); page ops derived under stated geometry, not block-table-measured",
+  "max_tokens": 128,
+  "model": "meta-models/muse-spark-open-1026",
+  "page_size_bytes": 2097152,
+  "prompt_lens": [
+    256,
+    1024,
+    4096
+  ],
+  "provenance": "derived",
+  "requests_per_cell": 8,
+  "run_id": "20261101T152247Z-baseten-spark",
+  "seed": 7,
+  "served_totals": {
+    "completion_tokens": 9216,
+    "prompt_tokens": 108194
+  },
+  "source": "baseten-batch-sweep",
+  "temperature": 0,
+  "trace_version": "0.1"
+}

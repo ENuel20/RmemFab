@@ -116,7 +116,14 @@ class RunStore:
         return {"run_id": run_id, "status": self.status_of(d),
                 "summary": self._read_json(d / SUMMARY),
                 "manifest": self._read_json(d / MANIFEST),
+                "scenario": self._read_json(d / SCENARIO),
                 "error": (self._read_json(d / FAILURE) or {}).get("error")}
+
+    def scenario_of(self, run_id: str) -> dict | None:
+        d = self.bundle_dir(run_id)
+        if d is None:
+            return None
+        return self._read_json(d / SCENARIO)
 
     def series(self, run_id: str, downsample: int) -> list | None:
         d = self.bundle_dir(run_id)

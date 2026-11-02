@@ -36,7 +36,9 @@ class TestClosedForm(unittest.TestCase):
     def test_back_to_back_transfers(self):
         """A1.2: pipelined transfers complete at L + i*n/B."""
         fab = one_link_fabric()
-        lats, fin, qd, _ = fab.transfer("n0", "pool", 0.0, 4, PAGE, False, pipelined=True)
+        lats, fin, qd, _, retx = fab.transfer("n0", "pool", 0.0, 4, PAGE, False, pipelined=True)
+        self.assertEqual(retx["attempts"], 1)
+        self.assertEqual(retx["lost"], [])
         per = max(PAGE / 48.0, PAGE / 1e9)
         fixed = 180.0 + 10.0
         for i, v in enumerate(lats, start=1):
@@ -49,7 +51,7 @@ class TestClosedForm(unittest.TestCase):
         completion time and time-weighted queue depth."""
         def run(k):
             fab = one_link_fabric()
-            _, fin, _, _ = fab.transfer("n0", "pool", 0.0, k, PAGE, False, pipelined=True)
+            _, fin, _, _, _ = fab.transfer("n0", "pool", 0.0, k, PAGE, False, pipelined=True)
             fab.finish(fin)
             s = fab.links["l0"]["rev"]  # fetch data flows against path order
             return fin, s.q_area

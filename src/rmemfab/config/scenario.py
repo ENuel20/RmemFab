@@ -95,6 +95,7 @@ class LinkSpec:
     in_flight_bytes: int | None
     queue_depth_bytes: int | None
     bidirectional: bool
+    loss_ppm: int | None = None
 
 
 @dataclass
@@ -146,6 +147,7 @@ class Scenario:
     switch: SwitchSpec | None = None
     warnings: list = field(default_factory=list)
     assumed: list = field(default_factory=list)
+    faults: dict = field(default_factory=dict)
 
 
 # --------------------------------------------------------------- semantics ---
@@ -258,7 +260,8 @@ def _build_fabric(raw, errors):
             return nodes, pools, {}, {}, False, {}
         links[l["id"]] = LinkSpec(l["id"], l["from"], l["to"], float(l["latency_ns"]),
                                   float(l["bandwidth_bytes_per_ns"]), l.get("in_flight_bytes"),
-                                  l.get("queue_depth_bytes"), bool(l.get("bidirectional", True)))
+                                  l.get("queue_depth_bytes"), bool(l.get("bidirectional", True)),
+                                  l.get("loss_ppm"))
     routes = _build_routes(nodes, pools, links, switches, errors)
     return nodes, pools, links, switches, legacy_switch, routes
 
@@ -348,6 +351,48 @@ def _validate_trace_workload(raw, wl, page, base_dir, errors, warnings):
     return vt
 
 
+def _validate_faults(raw, errors, warnings):
+    f = raw.get("faults", {}) or {}
+    if f.get("node_failure_process", {}).get("enabled"):
+        warnings.append("faults.node_failure_process: stochastic failures are not modeled; ignored")
+    pl = f.get("packet_loss", {}) or {}
+    if pl.get("ppm") and not pl.get("enabled"):
+        warnings.append("faults.packet_loss: ppm is set but enabled is false; no loss modeled")
+    tiers = {n.get("id") for n in raw.get("nodes", []) if n.get("id")}
+    switches = {s.get("id") for s in raw.get("fabric", {}).get("switches", []) if s.get("id")}
+    if isinstance(raw.get("fabric", {}).get("switch"), dict):
+        switches.add("switch-0")
+    link_ids = {l.get("id") for l in raw.get("fabric", {}).get("links", [])}
+    nf, ld = f.get("node_failures", []) or [], f.get("link_degradations", []) or []
+    by_node, by_link = {}, {}
+    for i, w in enumerate(nf):
+        tgt = w.get("node")
+        if tgt in switches:
+            errors.append(f"faults.node_failures[{i}]: switch failures are not modeled")
+        elif tgt not in tiers:
+            errors.append(f"faults.node_failures[{i}]: node '{tgt}' names no node")
+        else:
+            end = None if w.get("repair_ns") is None else w["time_ns"] + w["repair_ns"]
+            by_node.setdefault(tgt, []).append((w["time_ns"], end, i))
+    for i, w in enumerate(ld):
+        if w.get("link") not in link_ids:
+            errors.append(f"faults.link_degradations[{i}]: link '{w.get('link')}' names no link")
+            continue
+        if w["end_ns"] <= w["start_ns"]:
+            errors.append(f"faults.link_degradations[{i}]: end_ns must exceed start_ns")
+        by_link.setdefault(w["link"], []).append((w["start_ns"], w["end_ns"], i))
+    for tgt, wins in by_node.items():
+        wins.sort()
+        for (s0, e0, i0), (s1, e1, i1) in zip(wins, wins[1:]):
+            if e0 is None or s1 < e0:
+                errors.append(f"faults.node_failures[{i0},{i1}]: overlapping windows on '{tgt}'")
+    for tgt, wins in by_link.items():
+        wins.sort()
+        for (s0, e0, i0), (s1, e1, i1) in zip(wins, wins[1:]):
+            if s1 < e0:
+                errors.append(f"faults.link_degradations[{i0},{i1}]: overlapping windows on '{tgt}'")
+
+
 def validate(raw, require_provenance: bool = False, for_run: bool = False, base_dir=None):
     """Schema + semantic validation. Returns (errors, warnings, assumed).
 
@@ -412,7 +457,7 @@ def validate(raw, require_provenance: bool = False, for_run: bool = False, base_
         _validate_trace_workload(raw, wl, page, base_dir, errors, warnings)
     else:
         if wl.get("profile") not in IMPLEMENTED_PROFILES:
-            errors.append(RUN_ONLY + f"workload.profile: '{wl.get('profile')}' arrives in Phase 2 "
+            errors.append(RUN_ONLY + f"workload.profile: '{wl.get('profile')}' is not implemented "
                           f"(implemented: {', '.join(IMPLEMENTED_PROFILES)})")
         else:
             try:
@@ -430,7 +475,7 @@ def validate(raw, require_provenance: bool = False, for_run: bool = False, base_
     pol = raw["policy"]["name"]
     effective = pol if pol in IMPLEMENTED_POLICIES else FALLBACK_POLICY
     if pol not in IMPLEMENTED_POLICIES:
-        warnings.append(f"policy.name: '{pol}' arrives in a later phase; falling back to "
+        warnings.append(f"policy.name: '{pol}' is not implemented; falling back to "
                         f"'{FALLBACK_POLICY}' and recording the fallback in the manifest")
     try:
         _nodes, _pools, _links, _switches, _, _routes = _build_fabric(raw, errors)
@@ -452,13 +497,8 @@ def validate(raw, require_provenance: bool = False, for_run: bool = False, base_
     elif params:
         warnings.append(f"policy.params: ignored under '{effective}' fallback")
 
-    # features outside Phase 1
-    f = raw.get("faults", {})
-    if f.get("node_failures") or f.get("link_degradations") or f.get("packet_loss", {}).get("enabled") \
-            or f.get("node_failure_process", {}).get("enabled"):
-        warnings.append("faults: fault injection arrives in Phase 5; configured faults are ignored")
-    if any(l.get("loss_ppm") for l in raw["fabric"]["links"]):
-        warnings.append("fabric.links[].loss_ppm: loss is not modeled; ignored")
+    # faults: explicit windows are modeled; the stochastic process is not
+    _validate_faults(raw, errors, warnings)
     if raw.get("output", {}).get("format") == "parquet":
         warnings.append("output.format: parquet is not implemented; writing jsonl")
     run_only = [e for e in errors if e.startswith(RUN_ONLY)]
@@ -511,6 +551,15 @@ def build_scenario(raw: dict, *, seed=None, policy=None, strict_policy=False, re
             warnings.append("fabric.switch: absent on a peer-only multi-node run; bisection is "
                             "unbounded (only per-link and endpoint bandwidths constrain)")
     switch = switches.get("switch-0") if legacy_switch else None
+    fraw = raw.get("faults", {}) or {}
+    fpl = fraw.get("packet_loss", {}) or {}
+    fault_spec = {
+        "node_failures": [dict(w) for w in fraw.get("node_failures", []) or []],
+        "link_degradations": [dict(w) for w in fraw.get("link_degradations", []) or []],
+        "packet_loss_ppm": int(fpl.get("ppm", 0)) if fpl.get("enabled") else 0,
+        "link_loss_ppm": {lid: int(l.loss_ppm) for lid, l in links.items()
+                          if l.loss_ppm is not None},
+    }
     effective = requested if requested in IMPLEMENTED_POLICIES else FALLBACK_POLICY
     reason = None if effective == requested else (
         f"'{requested}' is not implemented; ran '{effective}' instead")
@@ -527,5 +576,5 @@ def build_scenario(raw: dict, *, seed=None, policy=None, strict_policy=False, re
         sample_interval_ns=interval, policy_requested=requested, policy_effective=effective,
         policy_params=raw["policy"].get("params", {}), fallback_reason=reason,
         cost_model=raw.get("cost_model", {}), output=raw.get("output", {}),
-        warnings=warnings, assumed=assumed,
+        warnings=warnings, assumed=assumed, faults=fault_spec,
     )

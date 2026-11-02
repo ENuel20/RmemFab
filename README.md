@@ -195,7 +195,7 @@ RmemFab/
 │   └── trace.schema.json     # memory access trace record schema
 └── examples/
     ├── llama-70b-cxl.json
-    ├── moe-remote-tiering.json
+    ├── eight-node-rdma-pool.json
     ├── policy-prefetch-failure.json
     ├── phase1-overflow.json   # deliberately undersized local tier; proves the remote path
     └── traces/

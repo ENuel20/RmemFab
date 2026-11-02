@@ -23,6 +23,7 @@ import numpy as np
 
 from .. import __version__
 from ..core.engine import GIB, LOCAL, REMOTE, Metrics, NodeState, PoolState
+from ..core.faults import FaultModel
 from ..memory.servers import Fabric, Server
 from ..policies import create_policy
 from ..policies.base import AccessContext, EvictToRemote, FetchInstall, PressureContext, Reject
@@ -60,8 +61,19 @@ class ReplayEngine:
         tier_servers = {n.id: n.local.server for n in self.nodes.values()}
         tier_servers.update({pid: Server(pspec.tier.bandwidth_bytes_per_ns)
                              for pid, pspec in sc.pools.items()})
+        fspec = sc.faults or {}
+        if (fspec.get("node_failures") or fspec.get("link_degradations")
+                or fspec.get("packet_loss_ppm") or fspec.get("link_loss_ppm")):
+            self.faults = FaultModel(
+                fspec.get("node_failures", []), fspec.get("link_degradations", []),
+                fspec.get("packet_loss_ppm", 0), fspec.get("link_loss_ppm", {}),
+                sc.seed, sc.duration_ns)
+        else:
+            self.faults = None
         self.fabric = Fabric(sc.links, tier_specs, tier_servers, sc.switches,
-                             sc.routes, sc.switch) if sc.links else None
+                             sc.routes, sc.switch, self.faults) if sc.links else None
+        self._edges = self.faults.edges() if self.faults else []
+        self._edge_idx = 0
         self.mig_matrix: dict = {}
         # Request sharding for ops without an explicit node: first-seen
         # request order, round-robin over compute nodes (deterministic).
@@ -182,7 +194,7 @@ class ReplayEngine:
     # --------------------------------------------------------- transfers ---
     def _xfer(self, now, node, dst_tier, tier_write, k, n, kind, request_id,
               from_tier, to_tier, pipelined=False):
-        lats, finish, qd, flags = self.fabric.transfer(
+        lats, finish, qd, flags, retx = self.fabric.transfer(
             node.id, dst_tier, now, k, n, tier_write, pipelined)
         route = self.sc.routes[(node.id, dst_tier)]
         hops = [lid for lid, _ in route.links]
@@ -191,7 +203,12 @@ class ReplayEngine:
         self._emit("transfer_begin", now, request_id, node.id, link=hops[0], path=hops,
                    bytes=nbytes,
                    from_node=(dst_tier if not tier_write else node.id),
-                   to_node=(node.id if not tier_write else dst_tier), kind=kind, pages=k)
+                   to_node=(node.id if not tier_write else dst_tier), kind=kind, pages=k,
+                   attempts=retx["attempts"], retx_delay_ns=int(retx["delay_ns"]),
+                   stall_ns=int(retx["stall_ns"]))
+        for l in retx["lost"]:
+            self._emit("transfer_lost", now, request_id, node.id, link=l["link"],
+                       attempt=l["attempt"], bytes=nbytes, rto_ns=int(l["rto_ns"]))
         self._emit("page_migrate_begin", now, request_id, node.id, pages=k, bytes=nbytes,
                    from_tier=from_tier, to_tier=to_tier, link=hops[0], path=hops, kind=kind)
         if flags[0]:
@@ -520,6 +537,11 @@ class ReplayEngine:
         for o in group:
             pid, op, nbytes, rid, row = o["page_id"], o["op"], o["bytes"], o["request_id"], o["row"]
             node = self._node_for(o)
+            if self.faults is not None and self.faults.down(node.id, now):
+                raise ReplayDivergence(
+                    f"row {row}: op executes on '{node.id}', which is down at ts={now} "
+                    f"(node-failure windows halt replay: parking a traced op would "
+                    f"invert causality with later rows)")
             if op == "alloc":
                 npages = -(-nbytes // self.page)
                 self._alloc(node, pid, npages, now, rid, row)
@@ -605,6 +627,27 @@ class ReplayEngine:
         return (self._route_lat(node.id, home, False)
                 + self._route_service(node.id, home, res_bytes))
 
+    def _apply_edges(self, upto):
+        """Apply fault-window edges in time order (bandwidth rescale at the
+        edge's own timestamp keeps the fluid drain exact)."""
+        while self._edge_idx < len(self._edges) and self._edges[self._edge_idx][0] <= upto:
+            t, kind, payload = self._edges[self._edge_idx]
+            self._edge_idx += 1
+            if kind == "degrade_begin":
+                self.fabric.rescale_link(payload["link"], payload["bandwidth_factor"], t)
+                self._emit("link_degraded", t, None, None, link=payload["link"],
+                           bandwidth_factor=payload["bandwidth_factor"],
+                           latency_factor=payload["latency_factor"])
+            elif kind == "degrade_end":
+                self.fabric.rescale_link(payload["link"], 1.0, t)
+                self._emit("link_restored", t, None, None, link=payload["link"])
+            elif kind == "node_fail":
+                self._emit("node_fail", t, None, payload["node"],
+                           reason=payload["reason"], recovery_ns=payload["recovery_ns"])
+            elif kind == "node_recover":
+                self._emit("node_recover", t, None, payload["node"],
+                           downtime_ns=payload["downtime_ns"])
+
     # ---------------------------------------------------------------- run ---
     def run(self):
         sc = self.sc
@@ -629,6 +672,7 @@ class ReplayEngine:
                     j += 1
                 self.now = ts
                 self._flush_completions(ts)
+                self._apply_edges(ts)
                 self._run_group(ts, ops[i:j])
                 self.processed += j - i
                 for o in ops[i:j]:
@@ -667,6 +711,7 @@ class ReplayEngine:
         row = {"t_ns": int(now), "accesses": ops_n - self._last_sample["accesses"],
                "evictions": c["evictions"] - self._last_sample["evictions"],
                "completed": len(self.req_done) - self._last_sample["completed"],
+               "degraded": self.faults.active_count(now) if self.faults else 0,
                "local_used_pages": {nid: nd.used for nid, nd in self.nodes.items()},
                "pool_used_pages": sum(p.used for p in self.pools.values()),
                "pools_used_pages": {pid: p.used for pid, p in self.pools.items()},
@@ -829,6 +874,10 @@ class ReplayEngine:
                       "normalization": self.trace.report["normalization"],
                       "validation_warnings": self.trace.report["warnings"]},
             "series_points": len(self.series),
+            "degraded": {"windows": self.faults.windows() if self.faults else [],
+                         "stalled_requests": 0,
+                         **(self.faults.counters() if self.faults
+                            else FaultModel.zero_counters())},
         }
         return roundf(s)
 
@@ -853,6 +902,14 @@ class ReplayEngine:
                  "request's round-robin shard. Placement is single-owner N-tier: "
                  "non-owners read through without moving the page; there is no "
                  "replication and no coherence protocol."]
+        if self.faults is not None:
+            notes.append("Faults: degradation rescales link bandwidth exactly at window edges; "
+                         "transfers issued inside a window use degraded latency.")
+            notes.append("Loss: reliable-transport persistence with RTO = 2x path fixed latency, "
+                         "at most 8 simulated draws per transfer; retries are computed "
+                         "synchronously at issue (no interleaved traffic in the RTO gap).")
+            notes.append("An op whose executing node is down halts replay with the offending row "
+                         "(no silent divergence). Policies are fault-oblivious.")
         return {
             "rmemfab_version": __version__, "schema_version": "0.1", "scenario_name": sc.name,
             "scenario_hash": sc.hash, "seed": sc.seed, "run_id": self.run_id,

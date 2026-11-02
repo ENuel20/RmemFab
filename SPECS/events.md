@@ -56,12 +56,12 @@ Unknown events must be preserved by consumers but may be ignored.
 
 | Event | Payload |
 | :--- | :--- |
-| `transfer_begin` | `link`, `path`, `bytes`, `from_node`, `to_node`, `kind` |
+| `transfer_begin` | `link`, `path`, `bytes`, `from_node`, `to_node`, `kind`, `pages`, `attempts`, `retx_delay_ns`, `stall_ns` |
 | `transfer_complete` | `link`, `path`, `bytes`, `duration_ns`, `queue_delay_ns` |
 | `link_congested` | `link`, `queue_bytes`, `utilization` |
 | `link_degraded` | `link`, `bandwidth_factor`, `latency_factor` |
 | `link_restored` | `link` |
-| `transfer_dropped` | `link`, `bytes`, `reason` |
+| `transfer_lost` | `link`, `attempt`, `bytes`, `rto_ns` |
 
 ## Prefetch
 
@@ -76,9 +76,16 @@ Unknown events must be preserved by consumers but may be ignored.
 
 | Event | Payload |
 | :--- | :--- |
-| `node_fail` | `node`, `reason` |
-| `node_recover` | `node`, `downtime_ns` |
-| `fault_injected` | `kind`, `target`, `parameters` |
+| `node_fail` | `reason`, `recovery_ns` (`node` envelope; `recovery_ns` is null when the failure is permanent) |
+| `node_recover` | `downtime_ns` (`node` envelope) |
+| `request_stalled` | `reason`, `resume_ns` |
+
+Faults delay work; they never drop transfers. A transfer issued while an
+endpoint is down stalls to recovery (see `stall_ns` on `transfer_begin`); a
+lost transfer attempt emits `transfer_lost` and is retried after one RTO
+(see `attempts`/`retx_delay_ns` on `transfer_begin`). Requests parked by a
+node failure emit `request_stalled` and resume; requests that cannot resume
+are rejected with reason `node_failed`.
 
 ## Policy
 

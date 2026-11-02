@@ -30,6 +30,7 @@ from ..telemetry.summary import canonical, roundf
 from ..telemetry.writers import JsonlWriter, NullWriter
 from ..workloads.geometry import pages_for, read_span
 from ..workloads.synthetic import ArrivalProcess
+from .faults import FaultModel
 from .rng import make_rng, stream_seeds
 from .scheduler import Scheduler
 
@@ -178,8 +179,17 @@ class Engine:
         tier_servers = {n.id: n.local.server for n in self.nodes}
         tier_servers.update({pid: Server(pspec.tier.bandwidth_bytes_per_ns)
                              for pid, pspec in sc.pools.items()})
+        fspec = sc.faults or {}
+        if (fspec.get("node_failures") or fspec.get("link_degradations")
+                or fspec.get("packet_loss_ppm") or fspec.get("link_loss_ppm")):
+            self.faults = FaultModel(
+                fspec.get("node_failures", []), fspec.get("link_degradations", []),
+                fspec.get("packet_loss_ppm", 0), fspec.get("link_loss_ppm", {}),
+                sc.seed, sc.duration_ns)
+        else:
+            self.faults = None
         self.fabric = Fabric(sc.links, tier_specs, tier_servers, sc.switches,
-                             sc.routes, sc.switch) if sc.links else None
+                             sc.routes, sc.switch, self.faults) if sc.links else None
         self.mig_matrix: dict = {}
         self.run_id = f"{sc.hash[:12]}-s{sc.seed}-{sc.policy_effective}"
         self.out_dir = Path(out_dir) if out_dir else None
@@ -195,6 +205,7 @@ class Engine:
         self.req_hist = Histogram()
         self.req_hist_all = Histogram()
         self.arrived = self.completed = self.rejected = 0
+        self.stalled_requests = 0
         self.completed_ss = 0
         self.tokens_ss = 0
         self.reject_reasons: dict = {}
@@ -355,7 +366,7 @@ class Engine:
     # --------------------------------------------------------- transfers ---
     def _xfer(self, now, node, dst_tier, tier_write, k, n, kind, request_id,
               from_tier, to_tier, pipelined=False):
-        lats, finish, qd, flags = self.fabric.transfer(
+        lats, finish, qd, flags, retx = self.fabric.transfer(
             node.id, dst_tier, now, k, n, tier_write, pipelined)
         route = self.sc.routes[(node.id, dst_tier)]
         hops = [lid for lid, _ in route.links]
@@ -364,7 +375,12 @@ class Engine:
         self._emit("transfer_begin", now, node.id, request_id, link=hops[0], path=hops,
                    bytes=nbytes,
                    from_node=(dst_tier if not tier_write else node.id),
-                   to_node=(node.id if not tier_write else dst_tier), kind=kind, pages=k)
+                   to_node=(node.id if not tier_write else dst_tier), kind=kind, pages=k,
+                   attempts=retx["attempts"], retx_delay_ns=int(retx["delay_ns"]),
+                   stall_ns=int(retx["stall_ns"]))
+        for l in retx["lost"]:
+            self._emit("transfer_lost", now, node.id, request_id, link=l["link"],
+                       attempt=l["attempt"], bytes=nbytes, rto_ns=int(l["rto_ns"]))
         self._emit("page_migrate_begin", now, node.id, request_id, pages=k, bytes=nbytes,
                    from_tier=from_tier, to_tier=to_tier, link=hops[0], path=hops, kind=kind)
         if flags[0]:
@@ -586,6 +602,20 @@ class Engine:
             r.node.waiting.append(r)
 
     def _start(self, r, now):
+        """Admit a request. Returns False when the node is down (the request
+        is re-queued with a resume event, or rejected when unrecoverable)."""
+        if self.faults is not None:
+            rec = self.faults.recovery_of(r.node.id, now)
+            if rec is not None:
+                if rec <= self.sc.duration_ns:
+                    r.node.waiting.append(r)
+                    self.stalled_requests += 1
+                    self.sched.schedule(int(rec), "admit_retry", r.node.id)
+                    self._emit("request_stalled", now, r.node.id, r.id,
+                               reason="node_failed", resume_ns=int(rec))
+                    return False
+                self._reject_unadmitted(r, now, "node_failed")
+                return False
         r.node.active_count += 1
         r.node.active.append(r)
         self._emit("prefill_begin", now, r.node.id, r.id, tokens=self.prompt)
@@ -602,7 +632,7 @@ class Engine:
             ok, why = self._alloc(r, ci, npages, now)
             if not ok:
                 self._reject(r, now, why)
-                return
+                return True
             self._observe({(r.idx, ci, i): 1 for i in range(a, a + npages)}, now, r.node)
             cp = r.classes[ci]
             placed_local = int((cp.where[a:a + npages] == LOCAL).sum())
@@ -624,6 +654,7 @@ class Engine:
         if wrote_any:
             self._bump(now, r.node, "stall_ns", max(finish - now - ideal, 0.0))
         self.sched.schedule(int(math.ceil(finish)), "prefill_end", (r, int(now)))
+        return True
 
     def _reject(self, r, now, why):
         r.status = "rejected"
@@ -632,15 +663,35 @@ class Engine:
         self._emit("request_rejected", now, r.node.id, r.id, reason=why)
         self._finish_common(r, now)
 
+    def _reject_unadmitted(self, r, now, why):
+        """Reject a request that never admitted (no slot held, no drain)."""
+        r.status = "rejected"
+        self.rejected += 1
+        self.reject_reasons[why] = self.reject_reasons.get(why, 0) + 1
+        self._emit("request_rejected", now, r.node.id, r.id, reason=why)
+        self._free(r, now)
+
     def _finish_common(self, r, now):
         self._free(r, now)
         if r in r.node.active:
             r.node.active.remove(r)
         r.node.active_count -= 1
         while r.node.waiting and r.node.active_count < self.concurrency:
-            self._start(r.node.waiting.pop(0), now)
+            if not self._start(r.node.waiting.pop(0), now):
+                break
 
     def _decode(self, r, now):
+        if self.faults is not None:
+            rec = self.faults.recovery_of(r.node.id, now)
+            if rec is not None:
+                if rec <= self.sc.duration_ns:
+                    self.stalled_requests += 1
+                    self.sched.schedule(int(rec), "decode", r)
+                    self._emit("request_stalled", now, r.node.id, r.id,
+                               reason="node_failed", resume_ns=int(rec))
+                    return
+                self._reject(r, now, "node_failed")
+                return
         node = r.node
         sp = node.spec.local
         total_tok = self.prompt + r.tokens_done + 1
@@ -817,6 +868,25 @@ class Engine:
                        duration_ns=dur, kind=kkind)
         elif kind == "sample":
             self._sample(now)
+        elif kind == "admit_retry":
+            node = self.node_by_id[data]
+            while node.waiting and node.active_count < self.concurrency:
+                if not self._start(node.waiting.pop(0), now):
+                    break
+        elif kind == "fault_degrade_begin":
+            self.fabric.rescale_link(data["link"], data["bandwidth_factor"], now)
+            self._emit("link_degraded", now, None, None, link=data["link"],
+                       bandwidth_factor=data["bandwidth_factor"],
+                       latency_factor=data["latency_factor"])
+        elif kind == "fault_degrade_end":
+            self.fabric.rescale_link(data["link"], 1.0, now)
+            self._emit("link_restored", now, None, None, link=data["link"])
+        elif kind == "fault_node_fail":
+            self._emit("node_fail", now, data["node"], None,
+                       reason=data["reason"], recovery_ns=data["recovery_ns"])
+        elif kind == "fault_node_recover":
+            self._emit("node_recover", now, data["node"], None,
+                       downtime_ns=data["downtime_ns"])
 
     def _sample(self, now):
         c = self.m_all.c
@@ -824,6 +894,7 @@ class Engine:
         row = {"t_ns": int(now), "accesses": ops - self._last_sample["accesses"],
                "evictions": c["evictions"] - self._last_sample["evictions"],
                "completed": self.completed - self._last_sample["completed"],
+               "degraded": self.faults.active_count(now) if self.faults else 0,
                "local_used_pages": {n.id: n.used for n in self.nodes},
                "pool_used_pages": sum(p.used for p in self.pools.values()),
                "pools_used_pages": {pid: p.used for pid, p in self.pools.items()},
@@ -851,6 +922,9 @@ class Engine:
             self._emit("run_start", 0, scenario_hash=sc.hash, seed=sc.seed, version=__version__)
             self.sched.schedule(self.arrivals.next_gap_ns(), "arrival")
             self.sched.schedule(sc.sample_interval_ns, "sample")
+            if self.faults is not None:
+                for t, kind, payload in self.faults.edges():
+                    self.sched.schedule(int(t), "fault_" + kind, payload)
             self.sched.run(self._handle, sc.duration_ns)
             end = sc.duration_ns
             for n in self.nodes:
@@ -1018,6 +1092,10 @@ class Engine:
                                   self.prompt + self.gen, k.kv_bytes_per_token, self.page)}
                              for k in self.classes]},
             "series_points": len(self.series),
+            "degraded": {"windows": self.faults.windows() if self.faults else [],
+                         "stalled_requests": self.stalled_requests,
+                         **(self.faults.counters() if self.faults
+                            else FaultModel.zero_counters())},
         }
         if sc.geometry_source == "legacy_dense":
             s["workload"]["kv_formula"] = "2 * layers * kv_heads * head_dim * dtype_bytes"
@@ -1030,8 +1108,8 @@ class Engine:
 
     def _manifest(self, summary):
         sc = self.sc
-        notes = ["Fabric: each compute->pool link is a FIFO byte server and the pool is a shared byte server "
-                 "(aggregate pool service never exceeds pool bandwidth).",
+        notes = ["Fabric: links, pools, and switches are FIFO byte servers; transfers "
+                 "occupy every hop on their static route plus the destination tier.",
                  "Requests shard round-robin across compute nodes; each node runs an independent "
                  "policy instance and its own admission queue (concurrency is per node).",
                  "Clean evictions transfer 0 bytes; only dirty pages write back.",
@@ -1050,6 +1128,15 @@ class Engine:
         notes.append("Placement is single-owner N-tier: pages migrate between node locals and "
                      "pools over static shortest-path routes; there is no page sharing or "
                      "coherence protocol.")
+        if self.faults is not None:
+            notes.append("Faults: degradation rescales link bandwidth exactly at window edges; "
+                         "transfers issued inside a window use degraded latency.")
+            notes.append("Loss: reliable-transport persistence with RTO = 2x path fixed latency, "
+                         "at most 8 simulated draws per transfer; retries are computed "
+                         "synchronously at issue (no interleaved traffic in the RTO gap).")
+            notes.append("Failures gate issue at event boundaries; node-down requests park to "
+                         "recovery or reject with reason node_failed. Policies are "
+                         "fault-oblivious: placement estimates use nominal fabric values.")
         return {
             "rmemfab_version": __version__, "schema_version": SCHEMA_VERSION, "scenario_name": sc.name,
             "scenario_hash": sc.hash, "seed": sc.seed, "run_id": self.run_id,

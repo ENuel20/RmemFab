@@ -19,8 +19,15 @@ BANNED = re.compile(
 
 class TestAgnostic(unittest.TestCase):
     def test_src_has_no_model_or_vendor_identifiers(self):
+        # api/providers.py is exempt by design: it is the provider-integration
+        # edge (not engine semantics) and must name the external endpoint it
+        # calls. Simulation paths never import it; tiers stay numbers and
+        # workloads stay parameters everywhere else.
+        exempt = {REPO / "src" / "rmemfab" / "api" / "providers.py"}
         hits = []
         for path in sorted((REPO / "src").rglob("*.py")):
+            if path in exempt:
+                continue
             for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
                 for m in BANNED.finditer(line):
                     hits.append(f"{path.relative_to(REPO)}:{i}: {m.group(0)}")

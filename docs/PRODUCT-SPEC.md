@@ -39,7 +39,7 @@ PR #1's Overview view folds into S1 (KPIs move to run detail / workbench recent-
 - **Purpose.** The starting point. One screen to begin an experiment three ways: describe it, upload a trace, or build a scenario manually.
 - **Layout.** Three entry cards (equal weight) + recent-runs strip below.
   1. `Describe experiment` (P0): textarea + model picker (Muse Spark default) + [Generate scenario]. Output is a scenario draft shown as a visible diff (see §7), never auto-run.
-  2. `Upload trace` (P0): dropzone (JSONL/JSON/CSV). On drop → S2 import report for that file. Until trace replay lands in the engine, the CTA after import is `Inspect` (not `Run`); `Run on this trace` is disabled with reason `trace replay arrives in Phase 2`.
+  2. `Upload trace` (P0): dropzone (JSONL/JSON/CSV). On drop → S2 import report for that file. Trace replay is engine-supported; until run-integration lands in the dashboard, the CTA after import is `Inspect` (not `Run`); `Run on this trace` is disabled with reason `run integration pending`.
   3. `Build manually` (P0): opens S3 with a blank-or-preset scenario.
 - **Recent runs strip.** Last N runs: `{run_id (short), scenario, policy, seed, status, p95, verdict delta if compared}`. Each links to S4. Empty state: `No runs yet — describe an experiment above`.
 - **Data.** `GET /runs?limit=N` (summaries only). No metrics beyond the strip fields.
