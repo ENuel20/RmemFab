@@ -29,6 +29,7 @@ import {
 
 interface OverviewViewProps {
   runs: SimulationRun[]
+  isMockMode?: boolean
   onOpenRunDetails: (run: SimulationRun) => void
   onNavigateToBuilder: () => void
   onNavigateToComparison: (initialRunIds?: string[]) => void
@@ -36,6 +37,7 @@ interface OverviewViewProps {
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
   runs,
+  isMockMode = true,
   onOpenRunDetails,
   onNavigateToBuilder,
   onNavigateToComparison
@@ -64,8 +66,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     ? ((validUtils.reduce((s, v) => s + v, 0) / validUtils.length) * 100).toFixed(1)
     : '—'
 
-  // Benchmark run for time-series display
-  const primaryRun = runs.find((r) => r.id === 'run-llama-cxl-hotcold') || runs[0]
+  // Benchmark run for time-series and topology display
+  const primaryRun = runs.find((r) => r.scenario_snapshot?.nodes && r.scenario_snapshot.nodes.length > 0) || runs[0]
 
   // Memory tier distribution data derived from authentic scenario snapshot
   const tierDistributionData = primaryRun?.scenario_snapshot?.nodes
@@ -98,25 +100,35 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div style={{ maxWidth: '820px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
               <Badge variant="cyan" icon={<Sparkles size={12} />}>DISCRETE-EVENT MEMORY EXPLORATION</Badge>
-              <Badge variant="amber">DEMO DATASET ACTIVE</Badge>
+              {isMockMode ? (
+                <Badge variant="amber">DEMO DATASET ACTIVE</Badge>
+              ) : (
+                <Badge variant="emerald">LIVE BACKEND ACTIVE</Badge>
+              )}
             </div>
             <h2 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.3px', margin: '4px 0 8px 0' }}>
               Welcome to RmemFab Simulation Studio
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6 }}>
-              Model, evaluate, and benchmark disaggregated remote-memory fabrics (CXL 2.0 / RDMA RoCE),
-              dynamic page placement policies (Hot/Cold EWMA vs. Frequency-Aware LRU-K), and memory-tiering
-              bottlenecks under LLM KV-cache decode and MoE expert serving workloads.
+              Model, evaluate, and benchmark disaggregated remote-memory fabrics (CXL / RDMA),
+              page placement policies (Hot/Cold Frequency Banding, Frequency-Aware LRU-K, Predictive Prefetch),
+              and memory-tiering behaviors under LLM KV-cache decode and trace replay workloads.
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               className="btn btn-outline"
-              onClick={() => onNavigateToComparison(['run-llama-cxl-swap', 'run-llama-cxl-hotcold'])}
+              onClick={() => {
+                if (isMockMode) {
+                  onNavigateToComparison(['run-llama-cxl-swap', 'run-llama-cxl-hotcold'])
+                } else {
+                  onNavigateToComparison()
+                }
+              }}
               style={{ fontSize: '12px', padding: '9px 14px' }}
             >
-              <span>Compare Swap vs Hot/Cold</span>
+              <span>{isMockMode ? 'Compare Swap vs Hot/Cold' : 'Compare Policies'}</span>
               <ArrowRight size={14} />
             </button>
             <button
@@ -140,14 +152,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           unit="runs"
           trend={{ value: `${runs.length} runs tracked`, isPositive: true }}
           icon={<Layers size={16} />}
+          provenance={isMockMode ? 'demo' : 'live'}
         />
         <KpiCard
-          title="Median Access Latency"
+          title="Memory Read Latency (p50)"
           value={medianP50}
-          subtitle="p50 access completion time"
+          subtitle="Median page read latency"
           unit={medianP50 !== '—' ? 'ns' : ''}
+          tooltip="Measures the time to access a memory page during simulation. These percentiles represent page-level memory read latency, not end-to-end request duration."
           trend={{ value: medianP50 !== '—' ? 'Measured median' : 'Awaiting data', isPositive: true }}
           icon={<TrendingDown size={16} />}
+          provenance={isMockMode ? 'demo' : 'live'}
         />
         <KpiCard
           title="Remote Memory Hit Ratio"
@@ -156,6 +171,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           unit={avgHitRatio !== '—' ? '%' : ''}
           trend={{ value: avgHitRatio !== '—' ? 'Across valid runs' : 'Awaiting data', isPositive: true }}
           icon={<Zap size={16} />}
+          provenance={isMockMode ? 'demo' : 'live'}
         />
         <KpiCard
           title="Fabric Utilization"
@@ -164,6 +180,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           unit={avgUtil !== '—' ? '%' : ''}
           trend={{ value: avgUtil !== '—' ? 'Across valid runs' : 'Awaiting data', isPositive: true }}
           icon={<Activity size={16} />}
+          provenance={isMockMode ? 'demo' : 'live'}
         />
       </div>
 
@@ -191,7 +208,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 style={{ fontSize: '11px', padding: '3px 8px', border: 'none' }}
                 onClick={() => setActiveChartMetric('latency')}
               >
-                Access Latency (ns)
+                Memory Read Latency (ns)
               </button>
               <button
                 className={`btn btn-sm ${activeChartMetric === 'bandwidth' ? 'btn-secondary' : 'btn-outline'}`}
@@ -225,15 +242,96 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
                     />
                     <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                    <Area type="monotone" dataKey="p99_latency_ns" name="p99 Latency (Tail)" stroke="#f43f5e" fillOpacity={1} fill="url(#p99Grad)" />
-                    <Area type="monotone" dataKey="p95_latency_ns" name="p95 Latency" stroke="#f59e0b" fillOpacity={0} />
-                    <Area type="monotone" dataKey="p50_latency_ns" name="p50 Latency (Median)" stroke="#06b6d4" fillOpacity={1} fill="url(#p50Grad)" />
+                    <Area type="monotone" dataKey="p99_latency_ns" name="Memory Read (p99 Tail)" stroke="#f43f5e" fillOpacity={1} fill="url(#p99Grad)" />
+                    <Area type="monotone" dataKey="p95_latency_ns" name="Memory Read (p95)" stroke="#f59e0b" fillOpacity={0} />
+                    <Area type="monotone" dataKey="p50_latency_ns" name="Memory Read (p50 Median)" stroke="#06b6d4" fillOpacity={1} fill="url(#p50Grad)" />
                   </AreaChart>
                 </ResponsiveContainer>
+              ) : primaryRun?.metrics?.latency_ns && (primaryRun.metrics.latency_ns.p50 != null || primaryRun.metrics.latency_ns.p95 != null || primaryRun.metrics.latency_ns.p99 != null) ? (
+                <div
+                  style={{
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    background: 'var(--bg-card-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '16px',
+                    border: '1px solid var(--border-subtle)'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          Measured Memory Read Latency Distribution
+                        </span>
+                        <Badge variant="blue">
+                          Whole-Run Percentiles
+                        </Badge>
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        Page-level memory read latency across percentiles. Identical percentiles reflect high local tier hit rates and histogram bin resolution.
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                      <div style={{ padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>p50 (Median)</span>
+                        <div className="tabular-nums" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent-cyan)', marginTop: '2px' }}>
+                          {formatNanoseconds(primaryRun.metrics.latency_ns.p50)}
+                        </div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>50% below this latency</span>
+                      </div>
+
+                      <div style={{ padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>p95 (Tail)</span>
+                        <div className="tabular-nums" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent-amber)', marginTop: '2px' }}>
+                          {formatNanoseconds(primaryRun.metrics.latency_ns.p95)}
+                        </div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>95% below this latency</span>
+                      </div>
+
+                      <div style={{ padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>p99 (Peak Tail)</span>
+                        <div className="tabular-nums" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent-rose)', marginTop: '2px' }}>
+                          {formatNanoseconds(primaryRun.metrics.latency_ns.p99)}
+                        </div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Worst 1% tail access</span>
+                      </div>
+                    </div>
+
+                    {/* Latency Range Progression Visualizer */}
+                    <div style={{ marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                        <span>Local DRAM Page-Read Baseline (~5.3 µs)</span>
+                        <span>Remote CXL Page-Read (~44.2 µs)</span>
+                      </div>
+                      <div style={{ display: 'flex', height: '8px', borderRadius: '4px', overflow: 'hidden', background: 'var(--border-subtle)' }}>
+                        <div style={{ width: '40%', background: 'var(--accent-cyan)' }} title="p50 Median Zone" />
+                        <div style={{ width: '35%', background: 'var(--accent-amber)' }} title="p95 Tail Escalation" />
+                        <div style={{ width: '25%', background: 'var(--accent-rose)' }} title="p99 Peak Spike" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', maxWidth: '78%', lineHeight: 1.4 }}>
+                      Whole-run percentiles are authentically measured from full simulation events. Per-interval sliding windows are not stored in time series. Switch to <strong>Fabric Bandwidth</strong> to view time-series dynamics.
+                    </span>
+                    <button
+                      className="btn btn-sm btn-outline"
+                      style={{ fontSize: '11px', padding: '3px 10px' }}
+                      onClick={() => setActiveChartMetric('bandwidth')}
+                    >
+                      View Bandwidth
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div style={{ height: '100%', minHeight: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)', padding: '24px', textAlign: 'center' }}>
                   <span style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '420px', lineHeight: 1.5 }}>
-                    Per-window latency percentiles are not recorded in engine time series. See summary distribution or inspect run details for overall p50, p95, p99.
+                    Access latency data is unavailable for this run.
                   </span>
                 </div>
               )
@@ -288,14 +386,24 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div className="chart-container-inner">
             {tierDistributionData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={tierDistributionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={tierDistributionData} margin={{ top: 10, right: 15, left: -10, bottom: 25 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-                  <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                  <XAxis
+                    dataKey="name"
+                    stroke="var(--text-muted)"
+                    fontSize={11}
+                    tickLine={false}
+                    interval={0}
+                    angle={-15}
+                    textAnchor="end"
+                    height={35}
+                  />
                   <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} unit=" GiB" />
                   <Tooltip
                     contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
                   />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
+                  <Bar dataKey="acceleratorHbmGb" name="Accelerator HBM" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
                   <Bar dataKey="localDramGb" name="Local DRAM" stackId="a" fill="#0ea5e9" radius={[0, 0, 0, 0]} />
                   <Bar dataKey="remotePoolGb" name="Remote CXL Pool" stackId="a" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -345,8 +453,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <th>Workload Profile</th>
                 <th>Placement Policy</th>
                 <th>Seed</th>
-                <th>p50 Latency</th>
-                <th>p99 Latency</th>
+                <th title="Measures the time to access a memory page during simulation. These percentiles represent page-level memory read latency, not end-to-end request duration.">Memory Read (p50)</th>
+                <th title="Measures the time to access a memory page during simulation. These percentiles represent page-level memory read latency, not end-to-end request duration.">Memory Read (p99)</th>
                 <th>Remote Hit %</th>
                 <th>Fabric Util</th>
                 <th>Status</th>
@@ -419,20 +527,22 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
           <div>
             <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-              LLM Working Set Dynamics
+              LLM KV Working Set Dynamics
             </h4>
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              Llama-3-70B autoregressive decode grows KV caches by 2.62 MB per sequence token. Hot/cold
-              EWMA policies keep the active decode window local, migrating cold prompt contexts to pooled CXL.
+              Autoregressive decode expands KV caches (320 KiB/token for Llama-3-70B GQA). Under local capacity
+              pressure, policies partition pages: swap-to-remote spills victims to pooled CXL, while frequency-aware
+              policies prioritize keeping frequently reused pages resident in local memory.
             </p>
           </div>
           <div>
             <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-              Fabric Bottleneck Prevention
+              Fabric Contention & Demand Paging
             </h4>
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              Demand paging causes head-of-line blocking when multiple compute nodes simultaneously fetch
-              cold pages. Predictive prefetching and rate-limited migrations avoid fabric congestion.
+              Concurrent remote page fetches share link bandwidth and accumulate queuing delay under memory pressure.
+              Predictive prefetching and frequency-aware placement can reduce remote fetch frequency, but speculative
+              prefetches contend for the same shared fabric links.
             </p>
           </div>
         </div>

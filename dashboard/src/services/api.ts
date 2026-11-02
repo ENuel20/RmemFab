@@ -4,7 +4,7 @@
  * and supporting an explicit Mock Telemetry Provider for offline demonstration.
  */
 
-import type { ScenarioConfig } from '../types/scenario'
+import type { ScenarioConfig } from '../types/scenario.ts'
 import type {
   SimulationRun,
   KpiMetric,
@@ -14,15 +14,15 @@ import type {
   ComparisonVerdict,
   ValidateResponse,
   TraceProfile
-} from '../types/telemetry'
-import { adaptRunSummaryToSimulationRun } from '../types/telemetry'
-import { MOCK_SIMULATION_RUNS, LLAMA_70B_CXL_SCENARIO } from './mockData'
-import { validateScenario } from '../utils/validation'
+} from '../types/telemetry.ts'
+import { adaptRunSummaryToSimulationRun } from '../types/telemetry.ts'
+import { MOCK_SIMULATION_RUNS, LLAMA_70B_CXL_SCENARIO } from './mockData.ts'
+import { validateScenario } from '../utils/validation.ts'
 import {
   validateRunSummaryList,
   validateRunDetail,
   validateSeriesPoints
-} from './contractValidators'
+} from './contractValidators.ts'
 
 export type { ValidateResponse } from '../types/telemetry'
 
@@ -47,9 +47,9 @@ class RmemFabApiClient {
   private cachedRuns: SimulationRun[] = [...MOCK_SIMULATION_RUNS]
 
   constructor() {
-    const savedUrl = localStorage.getItem('rmemfab_api_url')
-    if (savedUrl) this.baseUrl = savedUrl
-    const savedMode = localStorage.getItem('rmemfab_use_mock')
+    const savedUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('rmemfab_api_url') : null
+    if (savedUrl) this.baseUrl = savedUrl.trim().replace(/\/+$/, '')
+    const savedMode = typeof localStorage !== 'undefined' ? localStorage.getItem('rmemfab_use_mock') : null
     if (savedMode !== null) this.useMock = savedMode === 'true'
   }
 
@@ -58,8 +58,11 @@ class RmemFabApiClient {
   }
 
   public setBaseUrl(url: string): void {
-    this.baseUrl = url
-    localStorage.setItem('rmemfab_api_url', url)
+    const sanitized = url.trim().replace(/\/+$/, '')
+    this.baseUrl = sanitized
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('rmemfab_api_url', sanitized)
+    }
   }
 
   public isMockMode(): boolean {
@@ -68,14 +71,18 @@ class RmemFabApiClient {
 
   public setMockMode(enabled: boolean): void {
     this.useMock = enabled
-    localStorage.setItem('rmemfab_use_mock', String(enabled))
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('rmemfab_use_mock', String(enabled))
+    }
   }
 
   public resetToDefaults(): void {
     this.baseUrl = 'http://localhost:8000'
     this.useMock = true
-    localStorage.removeItem('rmemfab_api_url')
-    localStorage.removeItem('rmemfab_use_mock')
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('rmemfab_api_url')
+      localStorage.removeItem('rmemfab_use_mock')
+    }
     this.cachedRuns = [...MOCK_SIMULATION_RUNS]
   }
 
@@ -219,7 +226,21 @@ class RmemFabApiClient {
 
           // Authoritatively validate runtime response contract against docs/API.md
           const validatedSummaries = validateRunSummaryList(liveData)
-          return validatedSummaries.map((row) => adaptRunSummaryToSimulationRun(row, null, null))
+
+          // In LIVE mode, hydrate full run details in parallel so all views receive
+          // complete metrics (p99, hit ratios, link utilization) and authentic scenario snapshots.
+          const runs = await Promise.all(
+            validatedSummaries.map(async (row) => {
+              try {
+                const fullRun = await this.getRun(row.run_id)
+                if (fullRun) return fullRun
+              } catch {
+                // Graceful fallback to summary if detail fetch fails
+              }
+              return adaptRunSummaryToSimulationRun(row, null, null)
+            })
+          )
+          return runs
         }
         throw new Error(`FastAPI responded with HTTP ${res.status}: ${res.statusText || 'Failed to fetch runs'}`)
       } catch (err) {
@@ -269,27 +290,45 @@ class RmemFabApiClient {
 
       // Synthesize RunSummary base from detail
       const sum = (detail.summary as Record<string, unknown>) || {}
+      const sumAccess = (sum.access as Record<string, unknown>) || {}
+      const sumAccessLat = (sumAccess.latency_ns as Record<string, unknown>) || {}
+      const sumTraffic = (sum.traffic as Record<string, unknown>) || {}
+      const sumRequests = (sum.requests as Record<string, unknown>) || {}
+      const sumPolicy = (sum.policy as Record<string, unknown>) || {}
+      const scenarioObj = detail.scenario as Record<string, unknown> | null | undefined
+
       const summaryStrip: RunSummary = {
         run_id: detail.run_id,
-        scenario_name: typeof sum.scenario === 'string' ? sum.scenario : null,
-        scenario_hash: (typeof sum.scenario_hash === 'string' ? sum.scenario_hash : (typeof detail.manifest?.scenario_hash === 'string' ? detail.manifest.scenario_hash : null)),
-        seed: typeof sum.seed === 'number' ? sum.seed : null,
+        scenario_name: typeof sum.scenario === 'string'
+          ? sum.scenario
+          : (typeof scenarioObj?.name === 'string' ? scenarioObj.name as string : null),
+        scenario_hash: (typeof sum.scenario_hash === 'string'
+          ? sum.scenario_hash
+          : (typeof detail.manifest?.scenario_hash === 'string' ? detail.manifest.scenario_hash as string : null)),
+        seed: typeof sum.seed === 'number'
+          ? sum.seed
+          : (typeof scenarioObj?.seed === 'number' ? scenarioObj.seed as number : null),
         policy: {
-          requested: (sum.policy as Record<string, string>)?.requested ?? null,
-          effective: (sum.policy as Record<string, string>)?.effective ?? null,
-          fallback_reason: (sum.policy as Record<string, string>)?.fallback_reason ?? null
+          requested: typeof sumPolicy.requested === 'string' ? sumPolicy.requested : null,
+          effective: typeof sumPolicy.effective === 'string' ? sumPolicy.effective : null,
+          fallback_reason: typeof sumPolicy.fallback_reason === 'string' ? sumPolicy.fallback_reason : null
         },
         status: detail.status,
         error: detail.error || null,
-        arrived: (sum.requests as Record<string, number>)?.arrived ?? null,
-        completed: (sum.requests as Record<string, number>)?.completed ?? null,
-        rejected: (sum.requests as Record<string, number>)?.rejected ?? null,
-        p50: ((sum.access as Record<string, unknown>)?.latency_ns as Record<string, number>)?.p50 ?? null,
-        p95: ((sum.access as Record<string, unknown>)?.latency_ns as Record<string, number>)?.p95 ?? null,
-        remote_read_bytes: (sum.traffic as Record<string, number>)?.remote_read_bytes ?? null,
-        migration_bytes: (sum.traffic as Record<string, number>)?.migration_bytes ?? null,
+        arrived: typeof sumRequests.arrived === 'number' ? sumRequests.arrived : null,
+        completed: typeof sumRequests.completed === 'number' ? sumRequests.completed : null,
+        rejected: typeof sumRequests.rejected === 'number' ? sumRequests.rejected : null,
+        p50: typeof sumAccessLat.p50 === 'number' ? sumAccessLat.p50 : null,
+        p95: typeof sumAccessLat.p95 === 'number' ? sumAccessLat.p95 : null,
+        p99: typeof sumAccessLat.p99 === 'number' ? sumAccessLat.p99 : null,
+        local_hit_ratio: typeof sumAccess.local_hit_ratio === 'number' ? sumAccess.local_hit_ratio : null,
+        remote_hit_ratio: typeof sumAccess.remote_hit_ratio === 'number' ? sumAccess.remote_hit_ratio : null,
+        remote_read_bytes: typeof sumTraffic.remote_read_bytes === 'number' ? sumTraffic.remote_read_bytes : null,
+        remote_write_bytes: typeof sumTraffic.remote_write_bytes === 'number' ? sumTraffic.remote_write_bytes : null,
+        migration_bytes: typeof sumTraffic.migration_bytes === 'number' ? sumTraffic.migration_bytes : null,
         created_at: typeof sum.created_at === 'string' ? sum.created_at : null,
-        is_demo: false
+        is_demo: false,
+        scenario_snapshot: detail.scenario as ScenarioConfig | null
       }
 
       return adaptRunSummaryToSimulationRun(summaryStrip, detail, series)
@@ -371,6 +410,19 @@ class RmemFabApiClient {
         return body
       }
       return { verdict: 'refused', reason: typeof body.detail === 'string' ? body.detail : JSON.stringify(body) }
+    }
+
+    if (res.status === 404) {
+      let detailMsg = `HTTP 404: Comparison endpoint or run not found`
+      try {
+        const body = await res.json()
+        if (body.detail) {
+          detailMsg = `HTTP 404: ${typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)}`
+        }
+      } catch {
+        // use fallback detailMsg
+      }
+      throw new Error(detailMsg)
     }
 
     throw new Error(`Comparison API failed: HTTP ${res.status}`)

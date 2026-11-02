@@ -78,10 +78,16 @@ export interface RunSummary {
   rejected: number | null
   p50: number | null
   p95: number | null
+  p99?: number | null
   remote_read_bytes: number | null
+  remote_write_bytes?: number | null
   migration_bytes: number | null
   created_at: string | null
   is_demo?: boolean
+  local_hit_ratio?: number | null
+  remote_hit_ratio?: number | null
+  fabric_utilization?: number | null
+  scenario_snapshot?: ScenarioConfig | null
 }
 
 export interface RunDetail {
@@ -89,6 +95,7 @@ export interface RunDetail {
   status: 'completed' | 'failed'
   summary: Record<string, unknown> | null
   manifest: Record<string, unknown> | null
+  scenario?: ScenarioConfig | Record<string, unknown> | null
   error: string | null
 }
 
@@ -184,11 +191,15 @@ export interface MetricSummary {
   remote_hit_ratio: number | null
   miss_ratio: number | null
   remote_traffic_bytes: number | null
+  remote_write_bytes?: number | null
   migration_bytes: number | null
   prefetch_accuracy?: number | null
   fabric_utilization: number | null
   peak_queue_depth_bytes: number | null
   total_accesses: number | null
+  memory_bandwidth_utilization?: number | null
+  pool_utilization?: number | null
+  throughput_per_s?: number | null
 }
 
 export interface TimeSeriesPoint {
@@ -216,7 +227,7 @@ export interface BottleneckAnalysis {
   severity: 'low' | 'medium' | 'high' | 'critical'
   primary_bottleneck: string
   explanation: string
-  suggested_policy_tuning: string
+  suggested_policy_tuning?: string
 }
 
 export interface SimulationRun {
@@ -275,6 +286,7 @@ interface EngineAccess {
 
 interface EngineTraffic {
   remote_read_bytes?: number
+  remote_write_bytes?: number
   migration_bytes?: number
   prefetch_accuracy?: number
 }
@@ -295,8 +307,12 @@ interface EngineSummary {
   access?: EngineAccess
   traffic?: EngineTraffic
   links?: Record<string, EngineLink>
+  memory?: Record<string, { bandwidth_utilization?: number; capacity_pages?: number; [k: string]: unknown }>
+  pool?: { utilization?: number; bytes_served?: number; [k: string]: unknown }
+  pools?: Record<string, { utilization?: number; bytes_served?: number; [k: string]: unknown }>
   workload?: EngineWorkload
   workload_label?: string
+  requests?: { throughput_per_s?: number; [k: string]: unknown }
   time?: { virtual_time_ns?: number }
   rmemfab_version?: string
   created_at?: string
@@ -330,49 +346,110 @@ export function adaptRunSummaryToSimulationRun(
 
   // 1. Latency percentiles: from access.latency_ns or summary strip, never defaulted to 0
   const lat = sum?.access?.latency_ns
-  const p50 = typeof lat?.p50 === 'number' ? lat.p50 : (typeof summary.p50 === 'number' ? summary.p50 : null)
-  const p90 = typeof lat?.p90 === 'number' ? lat.p90 : null
-  const p95 = typeof lat?.p95 === 'number' ? lat.p95 : (typeof summary.p95 === 'number' ? summary.p95 : null)
-  const p99 = typeof lat?.p99 === 'number' ? lat.p99 : null
-  const mean = typeof lat?.mean === 'number' ? lat.mean : null
-  const max = typeof lat?.max === 'number' ? lat.max : null
+  const p50 = typeof lat?.p50 === 'number' && !isNaN(lat.p50)
+    ? lat.p50
+    : (typeof summary.p50 === 'number' && !isNaN(summary.p50) ? summary.p50 : null)
+  const p90 = typeof lat?.p90 === 'number' && !isNaN(lat.p90) ? lat.p90 : null
+  const p95 = typeof lat?.p95 === 'number' && !isNaN(lat.p95)
+    ? lat.p95
+    : (typeof summary.p95 === 'number' && !isNaN(summary.p95) ? summary.p95 : null)
+  const p99 = typeof lat?.p99 === 'number' && !isNaN(lat.p99)
+    ? lat.p99
+    : (typeof summary.p99 === 'number' && !isNaN(summary.p99) ? summary.p99 : null)
+  const mean = typeof lat?.mean === 'number' && !isNaN(lat.mean) ? lat.mean : null
+  const max = typeof lat?.max === 'number' && !isNaN(lat.max) ? lat.max : null
 
   // 2. Access counters & ratios: null if not measured
-  const localHitRatio = typeof sum?.access?.local_hit_ratio === 'number' ? sum.access.local_hit_ratio : null
-  const remoteHitRatio = typeof sum?.access?.remote_hit_ratio === 'number' ? sum.access.remote_hit_ratio : null
-  const missRatio = typeof sum?.access?.miss_ratio === 'number' ? sum.access.miss_ratio : null
-  const stallTimeNs = typeof sum?.access?.stall_ns === 'number' ? sum.access.stall_ns : null
-  const totalAccesses = typeof sum?.access?.count === 'number' ? sum.access.count : null
+  const localHitRatio = typeof sum?.access?.local_hit_ratio === 'number' && !isNaN(sum.access.local_hit_ratio)
+    ? sum.access.local_hit_ratio
+    : (typeof summary.local_hit_ratio === 'number' && !isNaN(summary.local_hit_ratio) ? summary.local_hit_ratio : null)
+  const remoteHitRatio = typeof sum?.access?.remote_hit_ratio === 'number' && !isNaN(sum.access.remote_hit_ratio)
+    ? sum.access.remote_hit_ratio
+    : (typeof summary.remote_hit_ratio === 'number' && !isNaN(summary.remote_hit_ratio) ? summary.remote_hit_ratio : null)
+  const missRatio = typeof sum?.access?.miss_ratio === 'number' && !isNaN(sum.access.miss_ratio) ? sum.access.miss_ratio : null
+  const stallTimeNs = typeof sum?.access?.stall_ns === 'number' && !isNaN(sum.access.stall_ns) ? sum.access.stall_ns : null
+  const totalAccesses = typeof sum?.access?.count === 'number' && !isNaN(sum.access.count) ? sum.access.count : null
 
   // 3. Traffic volume: null if not measured
-  const remoteTrafficBytes = typeof sum?.traffic?.remote_read_bytes === 'number'
+  const remoteTrafficBytes = typeof sum?.traffic?.remote_read_bytes === 'number' && !isNaN(sum.traffic.remote_read_bytes)
     ? sum.traffic.remote_read_bytes
-    : (typeof summary.remote_read_bytes === 'number' ? summary.remote_read_bytes : null)
-  const migrationBytes = typeof sum?.traffic?.migration_bytes === 'number'
+    : (typeof summary.remote_read_bytes === 'number' && !isNaN(summary.remote_read_bytes) ? summary.remote_read_bytes : null)
+  const remoteWriteBytes = typeof sum?.traffic?.remote_write_bytes === 'number' && !isNaN(sum.traffic.remote_write_bytes)
+    ? sum.traffic.remote_write_bytes
+    : (typeof summary.remote_write_bytes === 'number' && !isNaN(summary.remote_write_bytes) ? summary.remote_write_bytes : null)
+  const migrationBytes = typeof sum?.traffic?.migration_bytes === 'number' && !isNaN(sum.traffic.migration_bytes)
     ? sum.traffic.migration_bytes
-    : (typeof summary.migration_bytes === 'number' ? summary.migration_bytes : null)
-  const prefetchAccuracy = typeof sum?.traffic?.prefetch_accuracy === 'number' ? sum.traffic.prefetch_accuracy : null
+    : (typeof summary.migration_bytes === 'number' && !isNaN(summary.migration_bytes) ? summary.migration_bytes : null)
+  const prefetchAccuracy = typeof sum?.traffic?.prefetch_accuracy === 'number' && !isNaN(sum.traffic.prefetch_accuracy)
+    ? sum.traffic.prefetch_accuracy
+    : null
 
-  // 4. Fabric utilization and queue depth: derived mathematically from link stats when present, otherwise null
-  let maxUtil: number | null = null
+  const reqSummary = sum?.requests as Record<string, unknown> | undefined
+  const throughputPerS = typeof reqSummary?.throughput_per_s === 'number' && !isNaN(reqSummary.throughput_per_s)
+    ? reqSummary.throughput_per_s
+    : null
+
+  // 4. Fabric utilization and queue depth: derived mathematically from link stats when present, otherwise null.
+  // Note: 0.0 is a valid measured zero, not unavailable.
+  let maxFabricUtil: number | null = null
   let peakQueue: number | null = null
   if (sum?.links && typeof sum.links === 'object') {
     const linkEntries = Object.values(sum.links)
     if (linkEntries.length > 0) {
       linkEntries.forEach((l) => {
-        if (l && typeof l.max_queue_bytes === 'number') {
-          peakQueue = Math.max(peakQueue ?? 0, l.max_queue_bytes)
-        }
-        if (l && typeof l.utilization === 'number') {
-          maxUtil = Math.max(maxUtil ?? 0, l.utilization)
+        if (l && typeof l === 'object') {
+          const link = l as Record<string, unknown>
+          if (typeof link.max_queue_bytes === 'number' && !isNaN(link.max_queue_bytes)) {
+            peakQueue = peakQueue === null ? link.max_queue_bytes : Math.max(peakQueue, link.max_queue_bytes)
+          }
+          if (typeof link.utilization === 'number' && !isNaN(link.utilization)) {
+            maxFabricUtil = maxFabricUtil === null ? link.utilization : Math.max(maxFabricUtil, link.utilization)
+          }
         }
       })
     }
   }
 
+  // Preserve fallback to summary.fabric_utilization if not provided by links
+  if (maxFabricUtil === null && typeof summary.fabric_utilization === 'number' && !isNaN(summary.fabric_utilization)) {
+    maxFabricUtil = summary.fabric_utilization
+  }
+
+  // Local memory bandwidth utilization: strictly from summary.memory[node-id].bandwidth_utilization
+  let maxMemBwUtil: number | null = null
+  if (sum?.memory && typeof sum.memory === 'object') {
+    const memEntries = Object.values(sum.memory)
+    memEntries.forEach((m) => {
+      if (m && typeof m === 'object') {
+        const mem = m as Record<string, unknown>
+        if (typeof mem.bandwidth_utilization === 'number' && !isNaN(mem.bandwidth_utilization)) {
+          maxMemBwUtil = maxMemBwUtil === null ? mem.bandwidth_utilization : Math.max(maxMemBwUtil, mem.bandwidth_utilization)
+        }
+      }
+    })
+  }
+
+  // Remote pool utilization: strictly from summary.pool.utilization or summary.pools[pool-id].utilization
+  let poolUtil: number | null = null
+  const poolSingle = sum?.pool as Record<string, unknown> | undefined
+  if (poolSingle && typeof poolSingle.utilization === 'number' && !isNaN(poolSingle.utilization)) {
+    poolUtil = poolSingle.utilization
+  } else if (sum?.pools && typeof sum.pools === 'object') {
+    const poolEntries = Object.values(sum.pools)
+    poolEntries.forEach((p) => {
+      if (p && typeof p === 'object') {
+        const pool = p as Record<string, unknown>
+        if (typeof pool.utilization === 'number' && !isNaN(pool.utilization)) {
+          poolUtil = poolUtil === null ? pool.utilization : Math.max(poolUtil, pool.utilization)
+        }
+      }
+    })
+  }
+
   // 5. Time series mapping (Lossless preservation of backend SeriesPoint fields)
   // Per-window latency, queue depth, and utilization are NOT fabricated from summary values.
   const pageSize = sum?.workload?.page_size_bytes || man?.page_size_bytes
+  let prevTNs: number | null = null
   const timeSeries: TimeSeriesPoint[] = (series || []).map((sp) => {
     let localOccupancy: number | null = null
     if (pageSize && sp.local_used_pages && typeof sp.local_used_pages === 'object') {
@@ -384,9 +461,26 @@ export function adaptRunSummaryToSimulationRun(
       remoteOccupancy = sp.pool_used_pages * pageSize
     }
 
+    // Fabric bandwidth calculation from authentic window link_bytes:
+    // link_bytes is an object mapping link_id -> bytes transferred during this sampling window.
+    // The window duration delta_t = sp.t_ns - prevTNs.
+    // Bandwidth in GB/s (bytes/ns): sum(link_bytes) / delta_t.
+    let fabricBw: number | null = null
+    const deltaTNs = prevTNs !== null ? (sp.t_ns - prevTNs) : sp.t_ns
+    prevTNs = sp.t_ns
+
+    if (sp.link_bytes && typeof sp.link_bytes === 'object' && Object.keys(sp.link_bytes).length > 0 && deltaTNs > 0) {
+      const totalLinkBytes = Object.values(sp.link_bytes).reduce((acc, b) => acc + (Number(b) || 0), 0)
+      fabricBw = parseFloat((totalLinkBytes / deltaTNs).toFixed(3))
+    }
+
+    const timeFormatted = sp.t_ns >= 1_000_000_000
+      ? `${(sp.t_ns / 1_000_000_000).toFixed(1)}s`
+      : `${(sp.t_ns / 1_000_000).toFixed(0)} ms`
+
     return {
       time_ns: sp.t_ns,
-      time_formatted: `${(sp.t_ns / 1_000_000).toFixed(0)} ms`,
+      time_formatted: timeFormatted,
       accesses: sp.accesses,
       evictions: sp.evictions,
       completed: sp.completed,
@@ -395,7 +489,8 @@ export function adaptRunSummaryToSimulationRun(
       pools_used_pages: sp.pools_used_pages,
       link_bytes: sp.link_bytes,
       local_occupancy_bytes: localOccupancy,
-      remote_occupancy_bytes: remoteOccupancy
+      remote_occupancy_bytes: remoteOccupancy,
+      fabric_bandwidth_bytes_per_ns: fabricBw
       // Per-window latency and summary utilization are intentionally omitted
     }
   })
@@ -411,8 +506,10 @@ export function adaptRunSummaryToSimulationRun(
   const runError = summary.error || (typeof detail?.error === 'string' ? detail.error : null)
 
   // 7. Scenario snapshot: only if authentic scenario document is present, never manufactured
-  const rawScenario = (detail as unknown as Record<string, unknown> | undefined)?.scenario
-  const scenarioSnapshot: ScenarioConfig | null = rawScenario && typeof rawScenario === 'object' ? (rawScenario as ScenarioConfig) : null
+  const rawScenario = detail?.scenario ||
+    (detail as unknown as Record<string, unknown> | undefined)?.scenario_snapshot ||
+    summary.scenario_snapshot
+  const scenarioSnapshot: ScenarioConfig | null = rawScenario && typeof rawScenario === 'object' && Object.keys(rawScenario).length > 0 ? (rawScenario as ScenarioConfig) : null
 
   return {
     id: summary.run_id,
@@ -437,11 +534,15 @@ export function adaptRunSummaryToSimulationRun(
       remote_hit_ratio: remoteHitRatio,
       miss_ratio: missRatio,
       remote_traffic_bytes: remoteTrafficBytes,
+      remote_write_bytes: remoteWriteBytes,
       migration_bytes: migrationBytes,
       prefetch_accuracy: prefetchAccuracy,
-      fabric_utilization: maxUtil,
+      fabric_utilization: maxFabricUtil,
       peak_queue_depth_bytes: peakQueue,
-      total_accesses: totalAccesses
+      total_accesses: totalAccesses,
+      memory_bandwidth_utilization: maxMemBwUtil,
+      pool_utilization: poolUtil,
+      throughput_per_s: throughputPerS
     },
     time_series: timeSeries,
     bottleneck: null, // Engine does not produce heuristic bottleneck assertions

@@ -23,13 +23,15 @@ interface SidebarProps {
   onSelectView: (view: NavView) => void
   onNewScenario: () => void
   isMockMode?: boolean
+  runsCount?: number
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   onSelectView,
   onNewScenario,
-  isMockMode = true
+  isMockMode = true,
+  runsCount
 }) => {
   const navItems: Array<{
     id: NavView
@@ -52,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'runs',
       label: 'Simulation Runs',
       icon: <Activity size={18} className="nav-icon" />,
-      badge: '6'
+      badge: typeof runsCount === 'number' ? String(runsCount) : undefined
     },
     {
       id: 'comparison',
@@ -112,7 +114,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             {item.icon}
             <span>{item.label}</span>
-            {item.badge && <span className="nav-badge">{item.badge}</span>}
+            {item.badge && (
+              <span
+                className="nav-badge"
+                title={item.id === 'runs' && typeof runsCount === 'number' ? `Total simulation runs: ${runsCount}` : undefined}
+              >
+                {item.badge}
+              </span>
+            )}
           </button>
         ))}
       </nav>

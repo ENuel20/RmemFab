@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test src/utils/comparisonGuard.test.ts src/types/telemetry.test.ts src/utils/comparisonMetrics.test.ts src/services/contractValidators.test.ts src/utils/validation.test.ts src/components/infrastructure/topologyHelpers.test.ts",
+    "test": "node --experimental-strip-types --test src/utils/comparisonGuard.test.ts src/types/telemetry.test.ts src/utils/comparisonMetrics.test.ts src/services/contractValidators.test.ts src/utils/validation.test.ts src/components/infrastructure/topologyHelpers.test.ts src/types/liveTelemetryFixture.test.ts src/services/apiCompare.test.ts src/utils/selectionReconciliation.test.ts src/components/overview/overviewProvenanceAndTierChart.test.ts src/components/comparison/comparisonLoadingLifecycle.test.ts src/components/builder/moePresetValidation.test.ts src/components/builder/llamaPresetValidation.test.ts src/components/runs/simulationRunsCountParity.test.ts src/components/builder/scenarioBuilderIntegrity.test.ts src/components/comparison/migrationTerminologyAndApiContract.test.ts src/components/comparison/latencyTerminologyAndClarity.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

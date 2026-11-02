@@ -66,8 +66,8 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
     const diff = sortField === 'latency'
       ? (a.metrics.latency_ns.p50 ?? 0) - (b.metrics.latency_ns.p50 ?? 0)
       : sortField === 'scenario'
-      ? (a.scenario_name || a.id).localeCompare(b.scenario_name || b.id)
-      : b.id.localeCompare(a.id)
+        ? (a.scenario_name || a.id).localeCompare(b.scenario_name || b.id)
+        : b.id.localeCompare(a.id)
     return sortAsc ? diff : -diff
   })
 
@@ -151,7 +151,7 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
                 else { setSortField('latency'); setSortAsc(true); }
               }}
             >
-              <span>Median Latency</span>
+              <span>Memory Read (p50)</span>
               <ArrowUpDown size={12} />
             </button>
             <button
@@ -175,8 +175,17 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
             <div className="card-title">
               <Activity size={16} color="var(--accent-cyan)" />
               <span>Simulation Run History</span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>
-                ({filteredRuns.length} of {runs.length} runs matched)
+              <span
+                style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}
+                title={
+                  filteredRuns.length < runs.length
+                    ? `Filtered: ${filteredRuns.length} matching of ${runs.length} total runs`
+                    : `Total loaded runs: ${runs.length}`
+                }
+              >
+                {filteredRuns.length < runs.length
+                  ? `(${filteredRuns.length} of ${runs.length} total runs matched)`
+                  : `(${runs.length} of ${runs.length} runs matched)`}
               </span>
             </div>
             <div className="card-subtitle">
@@ -195,8 +204,8 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
                 <th>Policy</th>
                 <th>Seed</th>
                 <th>Virtual Duration</th>
-                <th>p50 Latency</th>
-                <th>p99 Latency</th>
+                <th title="Measures the time to access a memory page during simulation. These percentiles represent page-level memory read latency, not end-to-end request duration.">Memory Read (p50)</th>
+                <th title="Measures the time to access a memory page during simulation. These percentiles represent page-level memory read latency, not end-to-end request duration.">Memory Read (p99)</th>
                 <th>Remote Hit %</th>
                 <th>Fabric Util</th>
                 <th>Status</th>
@@ -366,18 +375,18 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
 
       {/* KPI Overview Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-        <div style={{ padding: '12px', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>MEDIAN LATENCY (p50)</span>
+        <div style={{ padding: '12px', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)' }} title="Measures the time to access a memory page during simulation. These percentiles represent page-level memory read latency, not end-to-end request duration.">
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>MEMORY READ LATENCY (p50)</span>
           <p className="tabular-nums" style={{ fontSize: '20px', fontWeight: 700, color: 'var(--accent-cyan)', marginTop: '4px' }}>
             {formatNanoseconds(run.metrics.latency_ns.p50)}
           </p>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }} title="Mean includes queueing delays, so a small number of heavily delayed accesses can raise the average above p99.">
             Mean: {formatNanoseconds(run.metrics.latency_ns.mean)}
           </span>
         </div>
 
-        <div style={{ padding: '12px', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>TAIL LATENCY (p99)</span>
+        <div style={{ padding: '12px', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)' }} title="Measures the time to access a memory page during simulation. These percentiles represent page-level memory read latency, not end-to-end request duration.">
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>TAIL READ LATENCY (p99)</span>
           <p className="tabular-nums" style={{ fontSize: '20px', fontWeight: 700, color: 'var(--accent-rose)', marginTop: '4px' }}>
             {formatNanoseconds(run.metrics.latency_ns.p99)}
           </p>
@@ -420,8 +429,8 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
               <YAxis stroke="var(--text-muted)" fontSize={11} unit=" ns" />
               <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-card)', borderRadius: '8px', color: '#fff' }} />
               <Legend wrapperStyle={{ fontSize: '11px' }} />
-              <Area type="monotone" dataKey="p99_latency_ns" name="p99 Latency" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.1} />
-              <Area type="monotone" dataKey="p50_latency_ns" name="p50 Latency" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.2} />
+              <Area type="monotone" dataKey="p99_latency_ns" name="Memory Read (p99)" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.1} />
+              <Area type="monotone" dataKey="p50_latency_ns" name="Memory Read (p50)" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.2} />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
@@ -502,7 +511,13 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
             fontSize: '12px'
           }}
         >
-          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Diagnostic Analysis:</span> Factual telemetry counters recorded. Heuristic bottleneck diagnosis is not asserted by the discrete-event simulator for this run.
+          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Diagnostic Analysis:</span>{' '}
+          {(run.metrics.local_hit_ratio === 1 || run.metrics.local_hit_ratio === 100) &&
+            (run.metrics.remote_hit_ratio === 0 || run.metrics.remote_hit_ratio == null) &&
+            (run.metrics.fabric_utilization === 0 || run.metrics.fabric_utilization == null) &&
+            (run.metrics.remote_traffic_bytes === 0 || run.metrics.remote_traffic_bytes == null)
+            ? '100% local memory hits (0% remote fabric utilization). The working set remained entirely resident in local memory; remote memory fabric and tiering mechanisms were not exercised.'
+            : 'Factual telemetry counters recorded. Heuristic bottleneck diagnosis is not asserted by the discrete-event simulator for this run.'}
         </div>
       )}
 

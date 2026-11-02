@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import type {
   ScenarioConfig,
   WorkloadProfile,
@@ -9,6 +9,12 @@ import type {
   ProvenanceKind
 } from '../../types/scenario'
 import { LLAMA_70B_CXL_SCENARIO, MOE_RDMA_SCENARIO } from '../../services/mockData'
+import {
+  IMPLEMENTED_POLICIES,
+  generateUniqueId,
+  renameNodeWithLinkCascade,
+  isStructurallyValidScenario
+} from './scenarioBuilderUtils'
 import { apiClient, type ValidateResponse } from '../../services/api'
 import { validateScenario, type ValidationError } from '../../utils/validation'
 import { Badge } from '../common/Badge'
@@ -53,7 +59,10 @@ const ProvenanceEditor: React.FC<ProvenanceEditorProps> = ({ label, value, onCha
       kind: kind as ProvenanceKind,
       ...(value?.source ? { source: value.source } : {}),
       ...(value?.method ? { method: value.method } : {}),
-      ...(value?.date ? { date: value.date } : {})
+      ...(value?.date ? { date: value.date } : {}),
+      ...(typeof value?.uncertainty_pct === 'number' && !isNaN(value.uncertainty_pct)
+        ? { uncertainty_pct: value.uncertainty_pct }
+        : {})
     })
   }
 
@@ -64,10 +73,31 @@ const ProvenanceEditor: React.FC<ProvenanceEditorProps> = ({ label, value, onCha
       kind: currentKind,
       ...(value?.source && field !== 'source' ? { source: value.source } : {}),
       ...(value?.method && field !== 'method' ? { method: value.method } : {}),
-      ...(value?.date && field !== 'date' ? { date: value.date } : {})
+      ...(value?.date && field !== 'date' ? { date: value.date } : {}),
+      ...(typeof value?.uncertainty_pct === 'number' && !isNaN(value.uncertainty_pct)
+        ? { uncertainty_pct: value.uncertainty_pct }
+        : {})
     }
     if (trimmed.length > 0) {
       updated[field] = trimmed
+    }
+    onChange(updated)
+  }
+
+  const updateUncertainty = (valStr: string) => {
+    const currentKind = value?.kind || 'assumed'
+    const updated: ProvenanceConfig = {
+      kind: currentKind,
+      ...(value?.source ? { source: value.source } : {}),
+      ...(value?.method ? { method: value.method } : {}),
+      ...(value?.date ? { date: value.date } : {})
+    }
+    const trimmed = valStr.trim()
+    if (trimmed.length > 0) {
+      const num = parseFloat(trimmed)
+      if (!isNaN(num) && num >= 0) {
+        updated.uncertainty_pct = num
+      }
     }
     onChange(updated)
   }
@@ -134,6 +164,18 @@ const ProvenanceEditor: React.FC<ProvenanceEditorProps> = ({ label, value, onCha
                 style={{ fontSize: '12px', padding: '4px 8px' }}
               />
             </div>
+            <div className="form-group" style={{ marginBottom: '6px', gridColumn: 'span 2' }}>
+              <label className="form-label" style={{ fontSize: '11px' }}>Uncertainty (±%)</label>
+              <input
+                type="number"
+                min={0}
+                step="any"
+                placeholder="e.g. 25"
+                value={value.uncertainty_pct !== undefined ? value.uncertainty_pct : ''}
+                onChange={(e) => updateUncertainty(e.target.value)}
+                style={{ fontSize: '12px', padding: '4px 8px' }}
+              />
+            </div>
           </>
         )}
       </div>
@@ -157,6 +199,43 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
   const [serverValidation, setServerValidation] = useState<ValidateResponse | null>(null)
   const [validationSource, setValidationSource] = useState<'mock' | 'live' | null>(null)
   const [isValidatingServer, setIsValidatingServer] = useState<boolean>(false)
+
+  const currentProfile = scenario.workload.type === 'synthetic' ? scenario.workload.profile : 'trace'
+  const isProfileExecutable = scenario.workload.type === 'trace' || currentProfile === 'kv_cache_decode'
+
+  const isPolicyExecutable = IMPLEMENTED_POLICIES.includes(scenario.policy.name)
+
+  const mutateScenario = useCallback((updater: ScenarioConfig | ((prev: ScenarioConfig) => ScenarioConfig)) => {
+    setScenario((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      const res = validateScenario(next)
+      setValidationErrors(res.errors)
+      return next
+    })
+  }, [])
+
+  const updateNodeAt = (index: number, patch: Partial<NodeConfig> | ((node: NodeConfig) => NodeConfig)) => {
+    mutateScenario((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((n, i) => {
+        if (i !== index) return n
+        return typeof patch === 'function' ? patch(n) : { ...n, ...patch }
+      })
+    }))
+  }
+
+  const updateLinkAt = (index: number, patch: Partial<FabricLinkConfig> | ((link: FabricLinkConfig) => FabricLinkConfig)) => {
+    mutateScenario((prev) => ({
+      ...prev,
+      fabric: {
+        ...prev.fabric,
+        links: prev.fabric.links.map((l, i) => {
+          if (i !== index) return l
+          return typeof patch === 'function' ? patch(l) : { ...l, ...patch }
+        })
+      }
+    }))
+  }
 
   // Server / Local Demo validation
   const handleValidateServer = async () => {
@@ -200,6 +279,22 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       return
     }
 
+    if (!isProfileExecutable) {
+      onNotify(
+        `Cannot run simulation: workload profile '${currentProfile}' is not implemented in the engine (only 'kv_cache_decode' is executable).`,
+        'error'
+      )
+      return
+    }
+
+    if (!isPolicyExecutable) {
+      onNotify(
+        `Cannot run simulation: policy '${scenario.policy.name}' is not implemented in the engine (executable policies: ${IMPLEMENTED_POLICIES.join(', ')}).`,
+        'error'
+      )
+      return
+    }
+
     setIsSubmitting(true)
     try {
       const res = await apiClient.submitScenario(scenario)
@@ -224,14 +319,12 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
 
   // Update general scenario properties
   const updateGeneral = <K extends keyof ScenarioConfig>(key: K, value: ScenarioConfig[K]) => {
-    const updated = { ...scenario, [key]: value }
-    setScenario(updated)
-    validateCurrent(updated)
+    mutateScenario((prev) => ({ ...prev, [key]: value }))
   }
 
   // Add / remove nodes
   const addNode = (role: 'compute' | 'memory') => {
-    const id = role === 'compute' ? `node-${scenario.nodes.length}` : `remote-pool-${scenario.nodes.length}`
+    const id = generateUniqueId(role === 'compute' ? 'node' : 'remote-pool', scenario.nodes.map((n) => n.id))
     const newNode: NodeConfig = role === 'compute'
       ? {
           id,
@@ -239,12 +332,26 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
           local_memory: {
             capacity_bytes: 549755813888, // 512 GiB
             latency_ns: 90,
-            bandwidth_bytes_per_ns: 400
+            bandwidth_bytes_per_ns: 400,
+            provenance: {
+              kind: 'assumed',
+              source: 'docs/HARDWARE-MODELS.md local DRAM preset',
+              method: 'Socket-class latency and bandwidth chosen for exploration; not measured on the target node.',
+              date: '2026-10-28',
+              uncertainty_pct: 25
+            }
           },
           compute: {
             accelerator: 'H100-80GB',
             accelerators: 8,
-            accelerator_memory_bytes: 85899345920
+            accelerator_memory_bytes: 85899345920,
+            provenance: {
+              kind: 'assumed',
+              source: 'NVIDIA H100 SXM datasheet reference',
+              method: 'Typical 8x H100-80GB host accelerator topology for LLM inference; tokens_per_second intentionally omitted.',
+              date: '2026-10-28',
+              uncertainty_pct: 10
+            }
           }
         }
       : {
@@ -253,13 +360,18 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
           remote_memory: {
             capacity_bytes: 4398046511104, // 4 TiB
             latency_ns: 180,
-            bandwidth_bytes_per_ns: 48
+            bandwidth_bytes_per_ns: 48,
+            provenance: {
+              kind: 'assumed',
+              source: 'docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset',
+              method: 'CXL.mem class latency and per-port bandwidth; not measured and not fitted to a switch topology.',
+              date: '2026-10-28',
+              uncertainty_pct: 30
+            }
           }
         }
 
-    const updated = { ...scenario, nodes: [...scenario.nodes, newNode] }
-    setScenario(updated)
-    validateCurrent(updated)
+    mutateScenario((prev) => ({ ...prev, nodes: [...prev.nodes, newNode] }))
     onNotify(`Added new ${role} node: ${id}`, 'info')
   }
 
@@ -275,13 +387,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       (l) => l.from !== removedNode.id && l.to !== removedNode.id
     )
 
-    const updated = {
-      ...scenario,
+    mutateScenario((prev) => ({
+      ...prev,
       nodes: updatedNodes,
       fabric: { links: updatedLinks }
-    }
-    setScenario(updated)
-    validateCurrent(updated)
+    }))
     onNotify(`Removed node ${removedNode.id} and associated links`, 'info')
   }
 
@@ -292,7 +402,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
 
     const from = computeNodes[0]?.id || scenario.nodes[0].id
     const to = memoryNodes[0]?.id || scenario.nodes[1]?.id || scenario.nodes[0].id
-    const id = `link-${scenario.fabric.links.length}`
+    const id = generateUniqueId('link', scenario.fabric.links.map((l) => l.id))
 
     const newLink: FabricLinkConfig = {
       id,
@@ -302,17 +412,22 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       bandwidth_bytes_per_ns: 48,
       in_flight_bytes: 16777216,
       queue_depth_bytes: 67108864,
-      bidirectional: true
-    }
-
-    const updated = {
-      ...scenario,
-      fabric: {
-        links: [...scenario.fabric.links, newLink]
+      bidirectional: true,
+      provenance: {
+        kind: 'assumed',
+        source: 'docs/HARDWARE-MODELS.md CXL per-port preset',
+        method: 'One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.',
+        date: '2026-10-28',
+        uncertainty_pct: 30
       }
     }
-    setScenario(updated)
-    validateCurrent(updated)
+
+    mutateScenario((prev) => ({
+      ...prev,
+      fabric: {
+        links: [...prev.fabric.links, newLink]
+      }
+    }))
     onNotify(`Added fabric link: ${id}`, 'info')
   }
 
@@ -322,12 +437,10 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       return
     }
     const updatedLinks = scenario.fabric.links.filter((_, i) => i !== index)
-    const updated = {
-      ...scenario,
+    mutateScenario((prev) => ({
+      ...prev,
       fabric: { links: updatedLinks }
-    }
-    setScenario(updated)
-    validateCurrent(updated)
+    }))
   }
 
   // Workload profile change
@@ -345,16 +458,14 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       updatedModel.popularity_skew = 1.1
     }
 
-    const updated: ScenarioConfig = {
-      ...scenario,
+    mutateScenario((prev) => ({
+      ...prev,
       workload: {
-        ...scenario.workload,
+        ...prev.workload,
         profile,
         model: updatedModel
       }
-    }
-    setScenario(updated)
-    validateCurrent(updated)
+    }))
   }
 
   // Policy change
@@ -364,23 +475,18 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       params = {
         hot_threshold: 8,
         cold_threshold: 1,
-        tick_ns: 1000000,
-        min_residency_ns: 10000000,
-        max_migrations_per_tick: 64
+        k: 2
       }
     } else if (name === 'frequency_aware') {
       params = {
-        history_length: 8,
-        k: 2,
-        protect_fraction: 0.6,
-        migration_watermark: 0.85,
-        max_migrations_per_tick: 128
+        k: 2
       }
     } else if (name === 'predictive_prefetch') {
       params = {
-        confidence_threshold: 0.75,
-        lookahead_depth: 4,
-        max_inflight_prefetches: 32
+        degree: 1,
+        stride: 1,
+        max_in_flight: 64,
+        on_hit: true
       }
     } else if (name === 'cost_aware') {
       params = {
@@ -389,15 +495,13 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       }
     }
 
-    const updated: ScenarioConfig = {
-      ...scenario,
+    mutateScenario((prev) => ({
+      ...prev,
       policy: {
         name,
         params
       }
-    }
-    setScenario(updated)
-    validateCurrent(updated)
+    }))
   }
 
   // Export JSON file
@@ -432,15 +536,20 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
       try {
         const text = event.target?.result as string
         const parsed = JSON.parse(text)
+        if (!isStructurallyValidScenario(parsed)) {
+          onNotify(
+            'Import rejected: JSON does not conform to the RmemFab scenario structure (missing required nodes, fabric links, workload, or policy). Existing scenario preserved.',
+            'error'
+          )
+          return
+        }
+
         const validation = validateScenario(parsed)
+        mutateScenario(parsed as ScenarioConfig)
 
         if (validation.isValid) {
-          setScenario(parsed as ScenarioConfig)
-          setValidationErrors([])
           onNotify(`Successfully imported scenario: ${parsed.name || file.name}`, 'success')
         } else {
-          setScenario(parsed as ScenarioConfig)
-          setValidationErrors(validation.errors)
           onNotify(`Scenario loaded with ${validation.errors.length} validation issues. Check error list.`, 'error')
         }
       } catch (err) {
@@ -455,9 +564,13 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
   const handleReset = (preset: 'llama' | 'moe') => {
     const target = preset === 'llama' ? LLAMA_70B_CXL_SCENARIO : MOE_RDMA_SCENARIO
     const clone = JSON.parse(JSON.stringify(target))
-    setScenario(clone)
-    validateCurrent(clone)
-    onNotify(`Reset editor to ${preset === 'llama' ? 'Llama-70B CXL' : 'MoE RDMA'} scenario`, 'info')
+    mutateScenario(clone)
+    onNotify(
+      preset === 'llama'
+        ? 'Loaded Llama-70B CXL scenario (Executable)'
+        : 'Loaded MoE RDMA scenario (Draft Specification - Unimplemented in engine)',
+      'info'
+    )
   }
 
   // Compute KV cache estimated size per token
@@ -497,13 +610,22 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                 {validationErrors.length} Schema {validationErrors.length === 1 ? 'Error' : 'Errors'}
               </Badge>
             )}
+            {!isProfileExecutable && (
+              <Badge
+                variant="amber"
+                icon={<AlertTriangle size={12} />}
+                title={`Workload profile '${currentProfile}' conforms to config.schema.json, but is not implemented in the engine (only kv_cache_decode is executable).`}
+              >
+                Engine Unimplemented (Draft)
+              </Badge>
+            )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               className="btn btn-sm btn-outline"
               onClick={() => handleReset('llama')}
-              title="Load Llama-70B 4-node CXL benchmark"
+              title="Load Llama-70B 4-node CXL benchmark (Executable)"
             >
               <RotateCcw size={13} />
               <span>Load Llama-70B</span>
@@ -511,10 +633,23 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             <button
               className="btn btn-sm btn-outline"
               onClick={() => handleReset('moe')}
-              title="Load Mixtral MoE 8-node RDMA benchmark"
+              title="Load Mixtral MoE RDMA scenario (Draft Specification - Unimplemented in Engine)"
             >
               <RotateCcw size={13} />
               <span>Load MoE Preset</span>
+              <span
+                style={{
+                  fontSize: '9px',
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  color: 'var(--accent-amber)',
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  marginLeft: '4px',
+                  fontWeight: 600
+                }}
+              >
+                DRAFT
+              </span>
             </button>
             <button
               className="btn btn-sm btn-secondary"
@@ -576,11 +711,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             <button
               className="btn btn-sm btn-primary"
               onClick={handleSubmitSimulation}
-              disabled={isSubmitting || (apiClient.isMockMode() && validationErrors.length > 0)}
-              title="Dispatch scenario to simulation engine"
+              disabled={isSubmitting || (apiClient.isMockMode() && validationErrors.length > 0) || !isProfileExecutable}
+              title={
+                !isProfileExecutable
+                  ? `Cannot run simulation: workload profile '${currentProfile}' is not implemented in simulator engine (only 'kv_cache_decode' is executable)`
+                  : "Dispatch scenario to simulation engine"
+              }
               style={{
-                opacity: (apiClient.isMockMode() && validationErrors.length > 0) ? 0.6 : 1,
-                cursor: (apiClient.isMockMode() && validationErrors.length > 0) || isSubmitting ? 'not-allowed' : 'pointer'
+                opacity: (apiClient.isMockMode() && validationErrors.length > 0) || !isProfileExecutable ? 0.6 : 1,
+                cursor: (apiClient.isMockMode() && validationErrors.length > 0) || isSubmitting || !isProfileExecutable ? 'not-allowed' : 'pointer'
               }}
             >
               {isSubmitting ? (
@@ -657,11 +796,13 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
 
           {serverValidation.warnings && serverValidation.warnings.length > 0 && (
             <div style={{ marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-amber)' }}>Warnings:</span>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-amber)' }}>Warnings / Engine Compatibility:</span>
               <ul style={{ paddingLeft: '20px', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                 {serverValidation.warnings.map((w, idx) => (
                   <li key={idx} style={{ marginBottom: '2px' }}>
-                    <span style={{ color: 'var(--accent-amber)' }}>{w}</span>
+                    <span style={{ color: w.includes('not runnable') ? 'var(--accent-rose)' : 'var(--accent-amber)', fontWeight: w.includes('not runnable') ? 600 : 400 }}>
+                      {w}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -893,9 +1034,12 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                         type="text"
                         value={node.id}
                         onChange={(e) => {
-                          const updated = [...scenario.nodes]
-                          updated[index].id = e.target.value
-                          setScenario({ ...scenario, nodes: updated })
+                          const res = renameNodeWithLinkCascade(scenario, node.id, e.target.value)
+                          if (res.error) {
+                            onNotify(res.error, 'error')
+                          } else {
+                            mutateScenario(res.updatedScenario)
+                          }
                         }}
                       />
                     </div>
@@ -908,11 +1052,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                             type="number"
                             value={node.local_memory.capacity_bytes}
                             onChange={(e) => {
-                              const updated = [...scenario.nodes]
-                              if (updated[index].local_memory) {
-                                updated[index].local_memory.capacity_bytes = parseInt(e.target.value) || 0
-                                setScenario({ ...scenario, nodes: updated })
-                              }
+                              const val = parseInt(e.target.value) || 0
+                              updateNodeAt(index, (n) => ({
+                                ...n,
+                                local_memory: n.local_memory ? { ...n.local_memory, capacity_bytes: val } : undefined
+                              }))
                             }}
                           />
                           <span className="form-hint">
@@ -926,11 +1070,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                             type="number"
                             value={node.local_memory.latency_ns}
                             onChange={(e) => {
-                              const updated = [...scenario.nodes]
-                              if (updated[index].local_memory) {
-                                updated[index].local_memory.latency_ns = parseFloat(e.target.value) || 0
-                                setScenario({ ...scenario, nodes: updated })
-                              }
+                              const val = parseFloat(e.target.value) || 0
+                              updateNodeAt(index, (n) => ({
+                                ...n,
+                                local_memory: n.local_memory ? { ...n.local_memory, latency_ns: val } : undefined
+                              }))
                             }}
                           />
                         </div>
@@ -941,11 +1085,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                             type="number"
                             value={node.local_memory.bandwidth_bytes_per_ns}
                             onChange={(e) => {
-                              const updated = [...scenario.nodes]
-                              if (updated[index].local_memory) {
-                                updated[index].local_memory.bandwidth_bytes_per_ns = parseFloat(e.target.value) || 0
-                                setScenario({ ...scenario, nodes: updated })
-                              }
+                              const val = parseFloat(e.target.value) || 0
+                              updateNodeAt(index, (n) => ({
+                                ...n,
+                                local_memory: n.local_memory ? { ...n.local_memory, bandwidth_bytes_per_ns: val } : undefined
+                              }))
                             }}
                           />
                         </div>
@@ -954,16 +1098,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                             label="Local Memory Tier Provenance"
                             value={node.local_memory.provenance}
                             onChange={(prov) => {
-                              const updated = [...scenario.nodes]
-                              if (updated[index].local_memory) {
+                              updateNodeAt(index, (n) => {
+                                if (!n.local_memory) return n
                                 if (prov) {
-                                  updated[index].local_memory.provenance = prov
-                                } else {
-                                  delete updated[index].local_memory.provenance
+                                  return { ...n, local_memory: { ...n.local_memory, provenance: prov } }
                                 }
-                                setScenario({ ...scenario, nodes: updated })
-                                validateCurrent({ ...scenario, nodes: updated })
-                              }
+                                const restMem = { ...n.local_memory }
+                                delete restMem.provenance
+                                return { ...n, local_memory: restMem }
+                              })
                             }}
                           />
                         </div>
@@ -978,11 +1121,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                             type="number"
                             value={node.remote_memory.capacity_bytes}
                             onChange={(e) => {
-                              const updated = [...scenario.nodes]
-                              if (updated[index].remote_memory) {
-                                updated[index].remote_memory.capacity_bytes = parseInt(e.target.value) || 0
-                                setScenario({ ...scenario, nodes: updated })
-                              }
+                              const val = parseInt(e.target.value) || 0
+                              updateNodeAt(index, (n) => ({
+                                ...n,
+                                remote_memory: n.remote_memory ? { ...n.remote_memory, capacity_bytes: val } : undefined
+                              }))
                             }}
                           />
                           <span className="form-hint">
@@ -996,11 +1139,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                             type="number"
                             value={node.remote_memory.latency_ns}
                             onChange={(e) => {
-                              const updated = [...scenario.nodes]
-                              if (updated[index].remote_memory) {
-                                updated[index].remote_memory.latency_ns = parseFloat(e.target.value) || 0
-                                setScenario({ ...scenario, nodes: updated })
-                              }
+                              const val = parseFloat(e.target.value) || 0
+                              updateNodeAt(index, (n) => ({
+                                ...n,
+                                remote_memory: n.remote_memory ? { ...n.remote_memory, latency_ns: val } : undefined
+                              }))
                             }}
                           />
                         </div>
@@ -1011,11 +1154,11 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                             type="number"
                             value={node.remote_memory.bandwidth_bytes_per_ns}
                             onChange={(e) => {
-                              const updated = [...scenario.nodes]
-                              if (updated[index].remote_memory) {
-                                updated[index].remote_memory.bandwidth_bytes_per_ns = parseFloat(e.target.value) || 0
-                                setScenario({ ...scenario, nodes: updated })
-                              }
+                              const val = parseFloat(e.target.value) || 0
+                              updateNodeAt(index, (n) => ({
+                                ...n,
+                                remote_memory: n.remote_memory ? { ...n.remote_memory, bandwidth_bytes_per_ns: val } : undefined
+                              }))
                             }}
                           />
                         </div>
@@ -1024,16 +1167,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                             label="Remote Pool Memory Tier Provenance"
                             value={node.remote_memory.provenance}
                             onChange={(prov) => {
-                              const updated = [...scenario.nodes]
-                              if (updated[index].remote_memory) {
+                              updateNodeAt(index, (n) => {
+                                if (!n.remote_memory) return n
                                 if (prov) {
-                                  updated[index].remote_memory.provenance = prov
-                                } else {
-                                  delete updated[index].remote_memory.provenance
+                                  return { ...n, remote_memory: { ...n.remote_memory, provenance: prov } }
                                 }
-                                setScenario({ ...scenario, nodes: updated })
-                                validateCurrent({ ...scenario, nodes: updated })
-                              }
+                                const restMem = { ...n.remote_memory }
+                                delete restMem.provenance
+                                return { ...n, remote_memory: restMem }
+                              })
                             }}
                           />
                         </div>
@@ -1101,9 +1243,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                         type="text"
                         value={link.id}
                         onChange={(e) => {
-                          const updated = [...scenario.fabric.links]
-                          updated[index].id = e.target.value
-                          setScenario({ ...scenario, fabric: { links: updated } })
+                          updateLinkAt(index, { id: e.target.value })
                         }}
                       />
                     </div>
@@ -1113,9 +1253,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                       <select
                         value={link.from}
                         onChange={(e) => {
-                          const updated = [...scenario.fabric.links]
-                          updated[index].from = e.target.value
-                          setScenario({ ...scenario, fabric: { links: updated } })
+                          updateLinkAt(index, { from: e.target.value })
                         }}
                       >
                         {scenario.nodes.map((n) => (
@@ -1129,9 +1267,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                       <select
                         value={link.to}
                         onChange={(e) => {
-                          const updated = [...scenario.fabric.links]
-                          updated[index].to = e.target.value
-                          setScenario({ ...scenario, fabric: { links: updated } })
+                          updateLinkAt(index, { to: e.target.value })
                         }}
                       >
                         {scenario.nodes.map((n) => (
@@ -1146,9 +1282,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                         type="number"
                         value={link.latency_ns}
                         onChange={(e) => {
-                          const updated = [...scenario.fabric.links]
-                          updated[index].latency_ns = parseFloat(e.target.value) || 0
-                          setScenario({ ...scenario, fabric: { links: updated } })
+                          updateLinkAt(index, { latency_ns: parseFloat(e.target.value) || 0 })
                         }}
                       />
                     </div>
@@ -1159,9 +1293,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                         type="number"
                         value={link.bandwidth_bytes_per_ns}
                         onChange={(e) => {
-                          const updated = [...scenario.fabric.links]
-                          updated[index].bandwidth_bytes_per_ns = parseFloat(e.target.value) || 0
-                          setScenario({ ...scenario, fabric: { links: updated } })
+                          updateLinkAt(index, { bandwidth_bytes_per_ns: parseFloat(e.target.value) || 0 })
                         }}
                       />
                     </div>
@@ -1172,9 +1304,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                         type="number"
                         value={link.queue_depth_bytes || 67108864}
                         onChange={(e) => {
-                          const updated = [...scenario.fabric.links]
-                          updated[index].queue_depth_bytes = parseInt(e.target.value) || 0
-                          setScenario({ ...scenario, fabric: { links: updated } })
+                          updateLinkAt(index, { queue_depth_bytes: parseInt(e.target.value) || 0 })
                         }}
                       />
                       <span className="form-hint">
@@ -1186,14 +1316,14 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                         label="Fabric Interconnect Link Provenance"
                         value={link.provenance}
                         onChange={(prov) => {
-                          const updated = [...scenario.fabric.links]
-                          if (prov) {
-                            updated[index].provenance = prov
-                          } else {
-                            delete updated[index].provenance
-                          }
-                          setScenario({ ...scenario, fabric: { links: updated } })
-                          validateCurrent({ ...scenario, fabric: { links: updated } })
+                          updateLinkAt(index, (l) => {
+                            if (prov) {
+                              return { ...l, provenance: prov }
+                            }
+                            const restLink = { ...l }
+                            delete restLink.provenance
+                            return restLink
+                          })
                         }}
                       />
                     </div>
@@ -1225,15 +1355,34 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                   value={scenario.workload.profile}
                   onChange={(e) => handleProfileChange(e.target.value as WorkloadProfile)}
                 >
-                  <option value="kv_cache_decode">kv_cache_decode (LLM Autoregressive Token Generation)</option>
-                  <option value="prefill">prefill (Prompt Processing Sequential Scans)</option>
-                  <option value="sparse_attention">sparse_attention (Long-Context Strided & Global Tokens)</option>
-                  <option value="moe">moe (Mixture-of-Experts Skewed Routing)</option>
-                  <option value="mixed">mixed (Multi-Tenant Serving Interference)</option>
+                  <option value="kv_cache_decode">kv_cache_decode (Executable — LLM Autoregressive Token Generation)</option>
+                  <option value="prefill">prefill (Planned — Prompt Processing Sequential Scans)</option>
+                  <option value="sparse_attention">sparse_attention (Planned — Long-Context Strided & Global Tokens)</option>
+                  <option value="moe">moe (Draft Specification — Mixture-of-Experts Skewed Routing)</option>
+                  <option value="mixed">mixed (Planned — Multi-Tenant Serving Interference)</option>
                 </select>
                 <span className="form-help">
                   Normalized memory event source for the discrete-event scheduler
                 </span>
+                {!isProfileExecutable && (
+                  <div
+                    style={{
+                      marginTop: '8px',
+                      padding: '10px 14px',
+                      background: 'rgba(245, 158, 11, 0.08)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '12px',
+                      color: 'var(--text-secondary)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-amber)', fontWeight: 600, marginBottom: '2px' }}>
+                      <AlertTriangle size={14} />
+                      <span>Engine Implementation Status</span>
+                    </div>
+                    Workload profile <code>&apos;{scenario.workload.profile}&apos;</code> conforms to <code>SPECS/config.schema.json</code>, but the simulator engine currently only executes <code>kv_cache_decode</code>. This scenario can be edited, schema-validated, and exported, but will be refused by the engine if submitted for simulation.
+                  </div>
+                )}
               </div>
 
               {/* Model Specifications */}
@@ -1244,11 +1393,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                   value={scenario.workload.model?.name || ''}
                   onChange={(e) => {
                     if (scenario.workload.type === 'synthetic') {
-                      setScenario({
-                        ...scenario,
-                        workload: {
-                          ...scenario.workload,
-                          model: { ...scenario.workload.model, name: e.target.value }
+                      const val = e.target.value
+                      mutateScenario((prev) => {
+                        if (prev.workload.type !== 'synthetic') return prev
+                        return {
+                          ...prev,
+                          workload: {
+                            ...prev.workload,
+                            model: { ...prev.workload.model, name: val }
+                          }
                         }
                       })
                     }
@@ -1265,11 +1418,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                   value={scenario.workload.model?.layers || 80}
                   onChange={(e) => {
                     if (scenario.workload.type === 'synthetic') {
-                      setScenario({
-                        ...scenario,
-                        workload: {
-                          ...scenario.workload,
-                          model: { ...scenario.workload.model, layers: parseInt(e.target.value) || 1 }
+                      const val = parseInt(e.target.value) || 1
+                      mutateScenario((prev) => {
+                        if (prev.workload.type !== 'synthetic') return prev
+                        return {
+                          ...prev,
+                          workload: {
+                            ...prev.workload,
+                            model: { ...prev.workload.model, layers: val }
+                          }
                         }
                       })
                     }
@@ -1285,11 +1442,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                   value={scenario.workload.model?.kv_heads || 8}
                   onChange={(e) => {
                     if (scenario.workload.type === 'synthetic') {
-                      setScenario({
-                        ...scenario,
-                        workload: {
-                          ...scenario.workload,
-                          model: { ...scenario.workload.model, kv_heads: parseInt(e.target.value) || 1 }
+                      const val = parseInt(e.target.value) || 1
+                      mutateScenario((prev) => {
+                        if (prev.workload.type !== 'synthetic') return prev
+                        return {
+                          ...prev,
+                          workload: {
+                            ...prev.workload,
+                            model: { ...prev.workload.model, kv_heads: val }
+                          }
                         }
                       })
                     }
@@ -1305,11 +1466,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                   value={scenario.workload.model?.head_dim || 128}
                   onChange={(e) => {
                     if (scenario.workload.type === 'synthetic') {
-                      setScenario({
-                        ...scenario,
-                        workload: {
-                          ...scenario.workload,
-                          model: { ...scenario.workload.model, head_dim: parseInt(e.target.value) || 1 }
+                      const val = parseInt(e.target.value) || 1
+                      mutateScenario((prev) => {
+                        if (prev.workload.type !== 'synthetic') return prev
+                        return {
+                          ...prev,
+                          workload: {
+                            ...prev.workload,
+                            model: { ...prev.workload.model, head_dim: val }
+                          }
                         }
                       })
                     }
@@ -1354,11 +1519,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                       value={scenario.workload.model?.experts || 8}
                       onChange={(e) => {
                         if (scenario.workload.type === 'synthetic') {
-                          setScenario({
-                            ...scenario,
-                            workload: {
-                              ...scenario.workload,
-                              model: { ...scenario.workload.model, experts: parseInt(e.target.value) || 1 }
+                          const val = parseInt(e.target.value) || 1
+                          mutateScenario((prev) => {
+                            if (prev.workload.type !== 'synthetic') return prev
+                            return {
+                              ...prev,
+                              workload: {
+                                ...prev.workload,
+                                model: { ...prev.workload.model, experts: val }
+                              }
                             }
                           })
                         }
@@ -1374,11 +1543,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                       value={scenario.workload.model?.top_k || 2}
                       onChange={(e) => {
                         if (scenario.workload.type === 'synthetic') {
-                          setScenario({
-                            ...scenario,
-                            workload: {
-                              ...scenario.workload,
-                              model: { ...scenario.workload.model, top_k: parseInt(e.target.value) || 1 }
+                          const val = parseInt(e.target.value) || 1
+                          mutateScenario((prev) => {
+                            if (prev.workload.type !== 'synthetic') return prev
+                            return {
+                              ...prev,
+                              workload: {
+                                ...prev.workload,
+                                model: { ...prev.workload.model, top_k: val }
+                              }
                             }
                           })
                         }
@@ -1398,11 +1571,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                   value={scenario.workload.requests?.arrival_rate_per_second || 8}
                   onChange={(e) => {
                     if (scenario.workload.type === 'synthetic') {
-                      setScenario({
-                        ...scenario,
-                        workload: {
-                          ...scenario.workload,
-                          requests: { ...scenario.workload.requests, arrival_rate_per_second: parseFloat(e.target.value) || 1 }
+                      const val = parseFloat(e.target.value) || 1
+                      mutateScenario((prev) => {
+                        if (prev.workload.type !== 'synthetic') return prev
+                        return {
+                          ...prev,
+                          workload: {
+                            ...prev.workload,
+                            requests: { ...prev.workload.requests, arrival_rate_per_second: val }
+                          }
                         }
                       })
                     }
@@ -1418,11 +1595,15 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                   value={scenario.workload.requests?.concurrency || 16}
                   onChange={(e) => {
                     if (scenario.workload.type === 'synthetic') {
-                      setScenario({
-                        ...scenario,
-                        workload: {
-                          ...scenario.workload,
-                          requests: { ...scenario.workload.requests, concurrency: parseInt(e.target.value) || 1 }
+                      const val = parseInt(e.target.value) || 1
+                      mutateScenario((prev) => {
+                        if (prev.workload.type !== 'synthetic') return prev
+                        return {
+                          ...prev,
+                          workload: {
+                            ...prev.workload,
+                            requests: { ...prev.workload.requests, concurrency: val }
+                          }
                         }
                       })
                     }
@@ -1453,14 +1634,39 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                 value={scenario.policy.name}
                 onChange={(e) => handlePolicyChange(e.target.value as PolicyName)}
               >
-                <option value="hot_cold">hot_cold (EWMA Access Counting with Migration Watermarks)</option>
-                <option value="frequency_aware">frequency_aware (LRU-K / Protected Segment Replacement)</option>
-                <option value="swap_remote">swap_remote (Reactive Demand Paging Baseline)</option>
+                <option value="hot_cold">hot_cold (Lifetime Frequency Thresholds with LRU-K)</option>
+                <option value="frequency_aware">frequency_aware (LRU-K Eviction)</option>
+                <option value="swap_remote">swap_remote (Demand Paging Baseline)</option>
                 <option value="local_only">local_only (Local DRAM Only Baseline - No Remote Fabric)</option>
                 <option value="predictive_prefetch">predictive_prefetch (Lookahead Speculative Prefetch)</option>
-                <option value="cost_aware">cost_aware (Multi-Objective Cost vs. Latency Optimization)</option>
+                {!IMPLEMENTED_POLICIES.includes(scenario.policy.name) && (
+                  <option value={scenario.policy.name}>
+                    {scenario.policy.name} (Not implemented in v0.1 engine)
+                  </option>
+                )}
+                {scenario.policy.name !== 'cost_aware' && (
+                  <option value="cost_aware" disabled>
+                    cost_aware (Multi-Objective Optimization — Not Implemented in v0.1 Engine)
+                  </option>
+                )}
               </select>
             </div>
+
+            {!isPolicyExecutable && (
+              <div
+                style={{
+                  gridColumn: 'span 2',
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  fontSize: '12px',
+                  color: 'var(--accent-amber)'
+                }}
+              >
+                Policy <strong>{scenario.policy.name}</strong> is preserved from configuration but is not implemented in the v0.1 simulation engine. The backend will fall back to swap_remote or reject execution upon submission.
+              </div>
+            )}
 
             {/* Dynamic Policy Parameters */}
             {scenario.policy.name === 'hot_cold' && (
@@ -1471,13 +1677,14 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                     type="number"
                     value={(scenario.policy.params?.hot_threshold as number) || 8}
                     onChange={(e) => {
-                      setScenario({
-                        ...scenario,
+                      const val = parseInt(e.target.value) || 0
+                      mutateScenario((prev) => ({
+                        ...prev,
                         policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, hot_threshold: parseInt(e.target.value) || 0 }
+                          ...prev.policy,
+                          params: { ...prev.policy.params, hot_threshold: val }
                         }
-                      })
+                      }))
                     }}
                   />
                   <span className="form-help">Promotes remote page to local memory</span>
@@ -1489,52 +1696,36 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                     type="number"
                     value={(scenario.policy.params?.cold_threshold as number) || 1}
                     onChange={(e) => {
-                      setScenario({
-                        ...scenario,
+                      const val = parseInt(e.target.value) || 0
+                      mutateScenario((prev) => ({
+                        ...prev,
                         policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, cold_threshold: parseInt(e.target.value) || 0 }
+                          ...prev.policy,
+                          params: { ...prev.policy.params, cold_threshold: val }
                         }
-                      })
+                      }))
                     }}
                   />
                   <span className="form-help">Demotes local page to remote memory</span>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Tick Interval (ns)</label>
+                  <label className="form-label">K (LRU-K Recency)</label>
                   <input
                     type="number"
-                    value={(scenario.policy.params?.tick_ns as number) || 1000000}
+                    value={(scenario.policy.params?.k as number) || 2}
                     onChange={(e) => {
-                      setScenario({
-                        ...scenario,
+                      const val = parseInt(e.target.value) || 1
+                      mutateScenario((prev) => ({
+                        ...prev,
                         policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, tick_ns: parseInt(e.target.value) || 0 }
+                          ...prev.policy,
+                          params: { ...prev.policy.params, k: val }
                         }
-                      })
+                      }))
                     }}
                   />
-                  <span className="form-help">Virtual time period for EWMA decay update</span>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Max Migrations Per Tick</label>
-                  <input
-                    type="number"
-                    value={(scenario.policy.params?.max_migrations_per_tick as number) || 64}
-                    onChange={(e) => {
-                      setScenario({
-                        ...scenario,
-                        policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, max_migrations_per_tick: parseInt(e.target.value) || 0 }
-                        }
-                      })
-                    }}
-                  />
-                  <span className="form-help">Rate-limits fabric traffic to prevent queue storms</span>
+                  <span className="form-help">LRU-K recency parameter to break ties inside bands</span>
                 </div>
               </>
             )}
@@ -1542,37 +1733,22 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             {scenario.policy.name === 'frequency_aware' && (
               <>
                 <div className="form-group">
-                  <label className="form-label">History Length</label>
-                  <input
-                    type="number"
-                    value={(scenario.policy.params?.history_length as number) || 8}
-                    onChange={(e) => {
-                      setScenario({
-                        ...scenario,
-                        policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, history_length: parseInt(e.target.value) || 1 }
-                        }
-                      })
-                    }}
-                  />
-                </div>
-
-                <div className="form-group">
                   <label className="form-label">K (Reference Distance)</label>
                   <input
                     type="number"
                     value={(scenario.policy.params?.k as number) || 2}
                     onChange={(e) => {
-                      setScenario({
-                        ...scenario,
+                      const val = parseInt(e.target.value) || 1
+                      mutateScenario((prev) => ({
+                        ...prev,
                         policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, k: parseInt(e.target.value) || 1 }
+                          ...prev.policy,
+                          params: { ...prev.policy.params, k: val }
                         }
-                      })
+                      }))
                     }}
                   />
+                  <span className="form-help">LRU-K reference distance: victims ordered by K-th-last-touch</span>
                 </div>
               </>
             )}
@@ -1580,40 +1756,62 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             {scenario.policy.name === 'predictive_prefetch' && (
               <>
                 <div className="form-group">
-                  <label className="form-label">Confidence Threshold (0.0 - 1.0)</label>
+                  <label className="form-label">Prefetch Degree</label>
                   <input
                     type="number"
-                    step={0.05}
-                    min={0.1}
-                    max={1.0}
-                    value={(scenario.policy.params?.confidence_threshold as number) || 0.75}
+                    min={1}
+                    value={(scenario.policy.params?.degree as number) || 1}
                     onChange={(e) => {
-                      setScenario({
-                        ...scenario,
+                      const val = parseInt(e.target.value) || 1
+                      mutateScenario((prev) => ({
+                        ...prev,
                         policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, confidence_threshold: parseFloat(e.target.value) || 0.75 }
+                          ...prev.policy,
+                          params: { ...prev.policy.params, degree: val }
                         }
-                      })
+                      }))
                     }}
                   />
+                  <span className="form-help">Number of sequential pages to prefetch</span>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Lookahead Depth (Tokens/Pages)</label>
+                  <label className="form-label">Stride</label>
                   <input
                     type="number"
-                    value={(scenario.policy.params?.lookahead_depth as number) || 4}
+                    value={(scenario.policy.params?.stride as number) || 1}
                     onChange={(e) => {
-                      setScenario({
-                        ...scenario,
+                      const val = parseInt(e.target.value) || 1
+                      mutateScenario((prev) => ({
+                        ...prev,
                         policy: {
-                          ...scenario.policy,
-                          params: { ...scenario.policy.params, lookahead_depth: parseInt(e.target.value) || 1 }
+                          ...prev.policy,
+                          params: { ...prev.policy.params, stride: val }
                         }
-                      })
+                      }))
                     }}
                   />
+                  <span className="form-help">Address stride step for prefetching</span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Max In-Flight</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={(scenario.policy.params?.max_in_flight as number) || 64}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1
+                      mutateScenario((prev) => ({
+                        ...prev,
+                        policy: {
+                          ...prev.policy,
+                          params: { ...prev.policy.params, max_in_flight: val }
+                        }
+                      }))
+                    }}
+                  />
+                  <span className="form-help">Maximum concurrent prefetches permitted</span>
                 </div>
               </>
             )}

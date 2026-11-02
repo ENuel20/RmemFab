@@ -12,6 +12,11 @@ import { ToastContainer, type ToastMessage } from './components/common/Toast'
 import { apiClient } from './services/api'
 import type { SimulationRun } from './types/telemetry'
 import type { ScenarioConfig } from './types/scenario'
+import {
+  reconcileComparisonSelection,
+  findDefaultComparisonPair,
+  reconcileSingleRunSelection
+} from './utils/selectionReconciliation.ts'
 import './App.css'
 
 export function App() {
@@ -22,6 +27,7 @@ export function App() {
     'run-llama-cxl-swap',
     'run-llama-cxl-hotcold'
   ])
+  const [selectedRunId, setSelectedRunId] = useState<string>('')
   const [activeScenarioName, setActiveScenarioName] = useState<string>('llama-70b-cxl')
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [isMockMode, setIsMockMode] = useState<boolean>(true)
@@ -45,7 +51,10 @@ export function App() {
       try {
         const data = await apiClient.getRuns()
         setRuns(data)
-        setIsMockMode(apiClient.isMockMode())
+        const mockActive = apiClient.isMockMode()
+        setIsMockMode(mockActive)
+        setSelectedComparisonIds((prev) => reconcileComparisonSelection(prev, data, mockActive))
+        setSelectedRunId((prev) => reconcileSingleRunSelection(prev, data))
       } catch (err) {
         setIsMockMode(apiClient.isMockMode())
         notify(
@@ -64,18 +73,54 @@ export function App() {
     )
   }
 
+  // Open run details modal, ensuring full run detail is retrieved if needed
+  const handleOpenRunDetails = async (run: SimulationRun) => {
+    setActiveRunDetail(run)
+    if (!isMockMode && !run.scenario_snapshot) {
+      try {
+        const full = await apiClient.getRun(run.id)
+        if (full) {
+          setActiveRunDetail(full)
+          setRuns((prev) => prev.map((r) => r.id === full.id ? full : r))
+        }
+      } catch {
+        // retain summary run
+      }
+    }
+  }
+
   // Navigate to Policy Comparison with given runs
   const handleNavigateToComparison = (initialRunIds?: string[]) => {
     if (initialRunIds && initialRunIds.length > 0) {
-      setSelectedComparisonIds(initialRunIds)
+      setSelectedComparisonIds((prev) => {
+        if (prev.length === initialRunIds.length && prev.every((id, i) => id === initialRunIds[i])) {
+          return prev
+        }
+        return initialRunIds
+      })
     }
     setCurrentView('comparison')
   }
 
   // Reset to default benchmark pair
   const handleSelectBenchmarkPair = () => {
-    setSelectedComparisonIds(['run-llama-cxl-swap', 'run-llama-cxl-hotcold'])
-    notify('Selected baseline pair: Swap-to-Remote vs. Hot/Cold Migration', 'info')
+    if (isMockMode) {
+      setSelectedComparisonIds(['run-llama-cxl-swap', 'run-llama-cxl-hotcold'])
+      notify('Selected baseline pair: Swap-to-Remote vs. Hot/Cold Migration', 'info')
+    } else {
+      const pair = findDefaultComparisonPair(runs)
+      if (pair) {
+        setSelectedComparisonIds(pair)
+        const r1 = runs.find((r) => r.id === pair[0])
+        const r2 = runs.find((r) => r.id === pair[1])
+        notify(`Selected LIVE pair: ${r1?.policy_name || pair[0]} vs. ${r2?.policy_name || pair[1]}`, 'info')
+      } else if (runs.length >= 2) {
+        setSelectedComparisonIds([runs[0].id, runs[1].id])
+        notify(`Selected LIVE pair: ${runs[0].policy_name} vs. ${runs[1].policy_name}`, 'info')
+      } else {
+        notify('Insufficient completed LIVE runs available for benchmark comparison', 'error')
+      }
+    }
   }
 
   // Handle new scenario click
@@ -94,6 +139,11 @@ export function App() {
     try {
       const data = await apiClient.getRuns()
       setRuns(data)
+      setSelectedComparisonIds((prev) => reconcileComparisonSelection(prev, data, isMockMode))
+      setSelectedRunId((prev) => {
+        if (data.some((r) => r.id === runId)) return runId
+        return reconcileSingleRunSelection(prev, data)
+      })
       notify(`Run list refreshed with new submission (Run ID: ${runId})`, 'info')
     } catch (err) {
       notify(
@@ -111,6 +161,8 @@ export function App() {
     try {
       const data = await apiClient.getRuns()
       setRuns(data)
+      setSelectedComparisonIds((prev) => reconcileComparisonSelection(prev, data, mockEnabled))
+      setSelectedRunId((prev) => reconcileSingleRunSelection(prev, data))
     } catch (err) {
       if (!mockEnabled) {
         notify(
@@ -128,6 +180,7 @@ export function App() {
     try {
       const data = await apiClient.getRuns()
       setRuns(data)
+      setSelectedRunId(reconcileSingleRunSelection('', data))
     } catch {
       // ignore
     }
@@ -142,6 +195,7 @@ export function App() {
         onSelectView={(view) => setCurrentView(view)}
         onNewScenario={handleNewScenario}
         isMockMode={isMockMode}
+        runsCount={runs.length}
       />
 
       {/* Main Workspace */}
@@ -157,7 +211,8 @@ export function App() {
         {currentView === 'overview' && (
           <OverviewView
             runs={runs}
-            onOpenRunDetails={(run) => setActiveRunDetail(run)}
+            isMockMode={isMockMode}
+            onOpenRunDetails={handleOpenRunDetails}
             onNavigateToBuilder={() => setCurrentView('builder')}
             onNavigateToComparison={handleNavigateToComparison}
           />
@@ -174,7 +229,7 @@ export function App() {
         {currentView === 'runs' && (
           <SimulationRunsView
             runs={runs}
-            onOpenRunDetails={(run) => setActiveRunDetail(run)}
+            onOpenRunDetails={handleOpenRunDetails}
             onSelectForComparison={handleToggleRunComparison}
             selectedComparisonIds={selectedComparisonIds}
             isMockMode={isMockMode}
@@ -194,6 +249,8 @@ export function App() {
         {currentView === 'infrastructure' && (
           <InfrastructureView
             runs={runs}
+            selectedRunId={selectedRunId}
+            onSelectRun={setSelectedRunId}
             isMockMode={isMockMode}
           />
         )}

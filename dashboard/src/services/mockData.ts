@@ -4,8 +4,8 @@
  * and discrete-event simulation models.
  */
 
-import type { ScenarioConfig } from '../types/scenario'
-import type { SimulationRun, TimeSeriesPoint } from '../types/telemetry'
+import type { ScenarioConfig } from '../types/scenario.ts'
+import type { SimulationRun, TimeSeriesPoint } from '../types/telemetry.ts'
 
 export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
   $schema: '../SPECS/config.schema.json',
@@ -23,12 +23,26 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
       local_memory: {
         capacity_bytes: 549755813888,
         latency_ns: 90,
-        bandwidth_bytes_per_ns: 400
+        bandwidth_bytes_per_ns: 400,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md local DRAM preset',
+          method: 'Socket-class latency and bandwidth chosen for exploration; not measured on the target node.',
+          date: '2026-10-28',
+          uncertainty_pct: 25
+        }
       },
       compute: {
         accelerator: 'H100-80GB',
         accelerators: 8,
-        accelerator_memory_bytes: 85899345920
+        accelerator_memory_bytes: 85899345920,
+        provenance: {
+          kind: 'assumed',
+          source: 'NVIDIA H100 SXM datasheet reference',
+          method: 'Typical 8x H100-80GB host accelerator topology for LLM inference; tokens_per_second intentionally omitted.',
+          date: '2026-10-28',
+          uncertainty_pct: 10
+        }
       }
     },
     {
@@ -37,12 +51,26 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
       local_memory: {
         capacity_bytes: 549755813888,
         latency_ns: 90,
-        bandwidth_bytes_per_ns: 400
+        bandwidth_bytes_per_ns: 400,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md local DRAM preset',
+          method: 'Socket-class latency and bandwidth chosen for exploration; not measured on the target node.',
+          date: '2026-10-28',
+          uncertainty_pct: 25
+        }
       },
       compute: {
         accelerator: 'H100-80GB',
         accelerators: 8,
-        accelerator_memory_bytes: 85899345920
+        accelerator_memory_bytes: 85899345920,
+        provenance: {
+          kind: 'assumed',
+          source: 'NVIDIA H100 SXM datasheet reference',
+          method: 'Typical 8x H100-80GB host accelerator topology for LLM inference; tokens_per_second intentionally omitted.',
+          date: '2026-10-28',
+          uncertainty_pct: 10
+        }
       }
     },
     {
@@ -51,12 +79,26 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
       local_memory: {
         capacity_bytes: 549755813888,
         latency_ns: 90,
-        bandwidth_bytes_per_ns: 400
+        bandwidth_bytes_per_ns: 400,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md local DRAM preset',
+          method: 'Socket-class latency and bandwidth chosen for exploration; not measured on the target node.',
+          date: '2026-10-28',
+          uncertainty_pct: 25
+        }
       },
       compute: {
         accelerator: 'H100-80GB',
         accelerators: 8,
-        accelerator_memory_bytes: 85899345920
+        accelerator_memory_bytes: 85899345920,
+        provenance: {
+          kind: 'assumed',
+          source: 'NVIDIA H100 SXM datasheet reference',
+          method: 'Typical 8x H100-80GB host accelerator topology for LLM inference; tokens_per_second intentionally omitted.',
+          date: '2026-10-28',
+          uncertainty_pct: 10
+        }
       }
     },
     {
@@ -65,12 +107,26 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
       local_memory: {
         capacity_bytes: 549755813888,
         latency_ns: 90,
-        bandwidth_bytes_per_ns: 400
+        bandwidth_bytes_per_ns: 400,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md local DRAM preset',
+          method: 'Socket-class latency and bandwidth chosen for exploration; not measured on the target node.',
+          date: '2026-10-28',
+          uncertainty_pct: 25
+        }
       },
       compute: {
         accelerator: 'H100-80GB',
         accelerators: 8,
-        accelerator_memory_bytes: 85899345920
+        accelerator_memory_bytes: 85899345920,
+        provenance: {
+          kind: 'assumed',
+          source: 'NVIDIA H100 SXM datasheet reference',
+          method: 'Typical 8x H100-80GB host accelerator topology for LLM inference; tokens_per_second intentionally omitted.',
+          date: '2026-10-28',
+          uncertainty_pct: 10
+        }
       }
     },
     {
@@ -79,7 +135,14 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
       remote_memory: {
         capacity_bytes: 4398046511104,
         latency_ns: 180,
-        bandwidth_bytes_per_ns: 48
+        bandwidth_bytes_per_ns: 48,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md CXL 2.0/3.0 preset',
+          method: 'CXL.mem class latency and per-port bandwidth; not measured and not fitted to a switch topology.',
+          date: '2026-10-28',
+          uncertainty_pct: 30
+        }
       }
     }
   ],
@@ -93,7 +156,14 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
         bandwidth_bytes_per_ns: 48,
         in_flight_bytes: 16777216,
         queue_depth_bytes: 67108864,
-        bidirectional: true
+        bidirectional: true,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md CXL per-port preset',
+          method: 'One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.',
+          date: '2026-10-28',
+          uncertainty_pct: 30
+        }
       },
       {
         id: 'node-1-cxl',
@@ -103,7 +173,14 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
         bandwidth_bytes_per_ns: 48,
         in_flight_bytes: 16777216,
         queue_depth_bytes: 67108864,
-        bidirectional: true
+        bidirectional: true,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md CXL per-port preset',
+          method: 'One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.',
+          date: '2026-10-28',
+          uncertainty_pct: 30
+        }
       },
       {
         id: 'node-2-cxl',
@@ -113,7 +190,14 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
         bandwidth_bytes_per_ns: 48,
         in_flight_bytes: 16777216,
         queue_depth_bytes: 67108864,
-        bidirectional: true
+        bidirectional: true,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md CXL per-port preset',
+          method: 'One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.',
+          date: '2026-10-28',
+          uncertainty_pct: 30
+        }
       },
       {
         id: 'node-3-cxl',
@@ -123,7 +207,14 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
         bandwidth_bytes_per_ns: 48,
         in_flight_bytes: 16777216,
         queue_depth_bytes: 67108864,
-        bidirectional: true
+        bidirectional: true,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md CXL per-port preset',
+          method: 'One-way latency and sustained bandwidth for a CXL.mem class link; queue depth and in-flight limits are scenario assumptions.',
+          date: '2026-10-28',
+          uncertainty_pct: 30
+        }
       }
     ]
   },
@@ -154,10 +245,7 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
     name: 'hot_cold',
     params: {
       hot_threshold: 8,
-      cold_threshold: 1,
-      tick_ns: 1000000,
-      min_residency_ns: 10000000,
-      max_migrations_per_tick: 64
+      cold_threshold: 1
     }
   },
   faults: {
@@ -184,7 +272,7 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
   $schema: '../SPECS/config.schema.json',
   version: '0.1',
   name: 'moe-remote-tiering',
-  description: 'Eight compute nodes running a Mixtral-style MoE workload over RDMA remote memory, with a node failure and a degraded link.',
+  description: 'Four compute nodes running a Mixtral-style MoE draft workload over RDMA remote memory (Draft Specification).',
   seed: 7,
   duration_ns: 120000000000,
   warmup_ns: 10000000000,
@@ -196,12 +284,24 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
       local_memory: {
         capacity_bytes: 274877906944,
         latency_ns: 95,
-        bandwidth_bytes_per_ns: 300
+        bandwidth_bytes_per_ns: 300,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md local DRAM preset',
+          method: 'DDR5 local memory tier model with 95ns local access latency',
+          uncertainty_pct: 20
+        }
       },
       compute: {
         accelerator: 'A100-80GB',
         accelerators: 8,
-        accelerator_memory_bytes: 85899345920
+        accelerator_memory_bytes: 85899345920,
+        provenance: {
+          kind: 'assumed',
+          source: 'NVIDIA A100-80GB datasheet',
+          method: 'Reference 8-accelerator configuration',
+          uncertainty_pct: 10
+        }
       }
     },
     {
@@ -210,12 +310,24 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
       local_memory: {
         capacity_bytes: 274877906944,
         latency_ns: 95,
-        bandwidth_bytes_per_ns: 300
+        bandwidth_bytes_per_ns: 300,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md local DRAM preset',
+          method: 'DDR5 local memory tier model with 95ns local access latency',
+          uncertainty_pct: 20
+        }
       },
       compute: {
         accelerator: 'A100-80GB',
         accelerators: 8,
-        accelerator_memory_bytes: 85899345920
+        accelerator_memory_bytes: 85899345920,
+        provenance: {
+          kind: 'assumed',
+          source: 'NVIDIA A100-80GB datasheet',
+          method: 'Reference 8-accelerator configuration',
+          uncertainty_pct: 10
+        }
       }
     },
     {
@@ -224,12 +336,24 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
       local_memory: {
         capacity_bytes: 274877906944,
         latency_ns: 95,
-        bandwidth_bytes_per_ns: 300
+        bandwidth_bytes_per_ns: 300,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md local DRAM preset',
+          method: 'DDR5 local memory tier model with 95ns local access latency',
+          uncertainty_pct: 20
+        }
       },
       compute: {
         accelerator: 'A100-80GB',
         accelerators: 8,
-        accelerator_memory_bytes: 85899345920
+        accelerator_memory_bytes: 85899345920,
+        provenance: {
+          kind: 'assumed',
+          source: 'NVIDIA A100-80GB datasheet',
+          method: 'Reference 8-accelerator configuration',
+          uncertainty_pct: 10
+        }
       }
     },
     {
@@ -238,12 +362,24 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
       local_memory: {
         capacity_bytes: 274877906944,
         latency_ns: 95,
-        bandwidth_bytes_per_ns: 300
+        bandwidth_bytes_per_ns: 300,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md local DRAM preset',
+          method: 'DDR5 local memory tier model with 95ns local access latency',
+          uncertainty_pct: 20
+        }
       },
       compute: {
         accelerator: 'A100-80GB',
         accelerators: 8,
-        accelerator_memory_bytes: 85899345920
+        accelerator_memory_bytes: 85899345920,
+        provenance: {
+          kind: 'assumed',
+          source: 'NVIDIA A100-80GB datasheet',
+          method: 'Reference 8-accelerator configuration',
+          uncertainty_pct: 10
+        }
       }
     },
     {
@@ -252,7 +388,13 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
       remote_memory: {
         capacity_bytes: 8796093022208,
         latency_ns: 2500,
-        bandwidth_bytes_per_ns: 25
+        bandwidth_bytes_per_ns: 25,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md RDMA memory pool preset',
+          method: 'Pooled remote DDR5 DRAM over RoCEv2 fabric',
+          uncertainty_pct: 25
+        }
       }
     }
   ],
@@ -266,7 +408,13 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
         bandwidth_bytes_per_ns: 25,
         in_flight_bytes: 4194304,
         queue_depth_bytes: 33554432,
-        bidirectional: true
+        bidirectional: true,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md RDMA per-port preset',
+          method: 'One-way latency and sustained bandwidth for a 200 Gbps class link',
+          uncertainty_pct: 30
+        }
       },
       {
         id: 'node-1-rdma',
@@ -276,7 +424,13 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
         bandwidth_bytes_per_ns: 25,
         in_flight_bytes: 4194304,
         queue_depth_bytes: 33554432,
-        bidirectional: true
+        bidirectional: true,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md RDMA per-port preset',
+          method: 'One-way latency and sustained bandwidth for a 200 Gbps class link',
+          uncertainty_pct: 30
+        }
       },
       {
         id: 'node-2-rdma',
@@ -286,7 +440,13 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
         bandwidth_bytes_per_ns: 25,
         in_flight_bytes: 4194304,
         queue_depth_bytes: 33554432,
-        bidirectional: true
+        bidirectional: true,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md RDMA per-port preset',
+          method: 'One-way latency and sustained bandwidth for a 200 Gbps class link',
+          uncertainty_pct: 30
+        }
       },
       {
         id: 'node-3-rdma',
@@ -296,7 +456,13 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
         bandwidth_bytes_per_ns: 25,
         in_flight_bytes: 4194304,
         queue_depth_bytes: 33554432,
-        bidirectional: true
+        bidirectional: true,
+        provenance: {
+          kind: 'assumed',
+          source: 'docs/HARDWARE-MODELS.md RDMA per-port preset',
+          method: 'One-way latency and sustained bandwidth for a 200 Gbps class link',
+          uncertainty_pct: 30
+        }
       }
     ]
   },
@@ -331,11 +497,7 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
   policy: {
     name: 'frequency_aware',
     params: {
-      history_length: 8,
-      k: 2,
-      protect_fraction: 0.6,
-      migration_watermark: 0.85,
-      max_migrations_per_tick: 128
+      k: 2
     }
   },
   faults: {
@@ -367,7 +529,7 @@ export const MOE_RDMA_SCENARIO: ScenarioConfig = {
     warmup_ns: 10000000000
   },
   output: {
-    format: 'parquet',
+    format: 'jsonl',
     path: 'runs/moe-remote-tiering',
     include_event_log: false
   }
@@ -459,7 +621,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       severity: 'low',
       primary_bottleneck: 'Fabric Queuing at Token Decode Transitions',
       explanation: 'Hot/Cold EWMA successfully maintains active KV cache heads in local DRAM (71.4% local hit ratio). Fabric utilization averages 42.6% with periodic migration bursts.',
-      suggested_policy_tuning: 'Increase min_residency_ns from 10ms to 25ms to reduce marginal page migrations during bursty prompt phases.'
+      suggested_policy_tuning: 'Increase hot_threshold from 8 to 16 to reduce marginal page migrations during bursty prompt phases.'
     },
     scenario_snapshot: LLAMA_70B_CXL_SCENARIO
   },

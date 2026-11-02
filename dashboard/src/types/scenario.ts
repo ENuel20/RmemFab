@@ -25,6 +25,7 @@ export interface ProvenanceConfig {
   source?: string
   method?: string
   date?: string
+  uncertainty_pct?: number
 }
 
 export interface MemoryTierConfig {

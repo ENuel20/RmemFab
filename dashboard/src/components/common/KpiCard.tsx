@@ -1,6 +1,6 @@
 import React from 'react'
 
-interface KpiCardProps {
+export interface KpiCardProps {
   title: string
   value: string | number
   subtitle: string
@@ -11,6 +11,8 @@ interface KpiCardProps {
   }
   icon?: React.ReactNode
   demoBadge?: boolean
+  provenance?: 'live' | 'demo' | 'none'
+  tooltip?: string
 }
 
 export const KpiCard: React.FC<KpiCardProps> = ({
@@ -20,15 +22,52 @@ export const KpiCard: React.FC<KpiCardProps> = ({
   unit,
   trend,
   icon,
-  demoBadge = true
+  demoBadge,
+  provenance,
+  tooltip
 }) => {
+  // Determine badge: explicit provenance takes priority, falls back to demoBadge
+  const resolvedProvenance: 'live' | 'demo' | 'none' =
+    provenance !== undefined
+      ? provenance
+      : demoBadge === false
+        ? 'none'
+        : demoBadge === true
+          ? 'demo'
+          : 'none'
+
   return (
-    <div className="kpi-card">
+    <div className="kpi-card" title={tooltip}>
       <div className="kpi-top">
         <span className="kpi-title">{title}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {demoBadge && (
-            <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--accent-amber)', padding: '1px 5px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+          {resolvedProvenance === 'live' && (
+            <span
+              style={{
+                fontSize: '9px',
+                fontWeight: 600,
+                color: 'var(--accent-emerald)',
+                padding: '1px 5px',
+                borderRadius: '4px',
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.3)'
+              }}
+            >
+              LIVE
+            </span>
+          )}
+          {resolvedProvenance === 'demo' && (
+            <span
+              style={{
+                fontSize: '9px',
+                fontWeight: 600,
+                color: 'var(--accent-amber)',
+                padding: '1px 5px',
+                borderRadius: '4px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)'
+              }}
+            >
               DEMO
             </span>
           )}

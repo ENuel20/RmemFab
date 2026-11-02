@@ -114,7 +114,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
             </div>
             <span className="form-help">
-              Expected FastAPI endpoint running `uvicorn rmemfab.api.app:app`
+              Expected FastAPI endpoint running `python -m uvicorn rmemfab.api.app:create_app --factory --host 127.0.0.1 --port 8000`
             </span>
           </div>
 

@@ -60,6 +60,7 @@ export function validateRunSummary(item: unknown, index?: number): RunSummary {
     p50: typeof obj.p50 === 'number' ? obj.p50 : null,
     p95: typeof obj.p95 === 'number' ? obj.p95 : null,
     remote_read_bytes: typeof obj.remote_read_bytes === 'number' ? obj.remote_read_bytes : null,
+    remote_write_bytes: typeof obj.remote_write_bytes === 'number' ? obj.remote_write_bytes : null,
     migration_bytes: typeof obj.migration_bytes === 'number' ? obj.migration_bytes : null,
     created_at: typeof obj.created_at === 'string' ? obj.created_at : null,
     is_demo: obj.is_demo === true
@@ -102,6 +103,7 @@ export function validateRunDetail(data: unknown, expectedId?: string): RunDetail
 
   const summary = obj.summary && typeof obj.summary === 'object' ? (obj.summary as Record<string, unknown>) : null
   const manifest = obj.manifest && typeof obj.manifest === 'object' ? (obj.manifest as Record<string, unknown>) : null
+  const scenario = obj.scenario && typeof obj.scenario === 'object' ? (obj.scenario as Record<string, unknown>) : null
   const error = typeof obj.error === 'string' ? obj.error : null
 
   return {
@@ -109,6 +111,7 @@ export function validateRunDetail(data: unknown, expectedId?: string): RunDetail
     status: obj.status,
     summary,
     manifest,
+    scenario,
     error
   }
 }

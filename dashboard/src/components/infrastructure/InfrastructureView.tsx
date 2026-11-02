@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { SimulationRun } from '../../types/telemetry'
+import { apiClient } from '../../services/api'
 import {
   Network,
   Database,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '../common/Badge'
 import { deriveTopologySummary } from './topologyHelpers'
+import { reconcileSingleRunSelection } from '../../utils/selectionReconciliation'
 import {
   formatBytes,
   formatNanoseconds,
@@ -21,25 +23,62 @@ import {
 interface InfrastructureViewProps {
   runs?: SimulationRun[]
   selectedRunId?: string
+  onSelectRun?: (runId: string) => void
   isMockMode?: boolean
 }
 
 export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
   runs = [],
-  selectedRunId: initialRunId,
+  selectedRunId: externalSelectedRunId,
+  onSelectRun,
   isMockMode = true
 }) => {
-  const [selectedRunId, setSelectedRunId] = useState<string>(() => {
-    if (initialRunId) return initialRunId
-    return runs[0]?.id || ''
-  })
+  const [internalSelectedRunId, setInternalSelectedRunId] = useState<string>('')
   const [hoveredLink, setHoveredLink] = useState<string | null>(null)
+  const [fetchedRun, setFetchedRun] = useState<SimulationRun | null>(null)
 
-  const currentRun = runs.find((r) => r.id === selectedRunId) || runs[0]
-  const scenario = currentRun?.scenario_snapshot
+  // Synchronize selection: prefer controlled prop, fallback to internal state, fallback to most recent run
+  const activeSelectedRunId = reconcileSingleRunSelection(
+    externalSelectedRunId || internalSelectedRunId,
+    runs
+  )
+
+  const currentRun = runs.find((r) => r.id === activeSelectedRunId) || (runs.length > 0 ? runs[0] : undefined)
+
+  const handleSelectRun = (newRunId: string) => {
+    setInternalSelectedRunId(newRunId)
+    onSelectRun?.(newRunId)
+  }
+
+  useEffect(() => {
+    if (!currentRun || currentRun.scenario_snapshot || isMockMode) {
+      return
+    }
+
+    let ignore = false
+    const fetchDetail = async () => {
+      try {
+        const fullRun = await apiClient.getRun(currentRun.id)
+        if (!ignore && fullRun) {
+          setFetchedRun(fullRun)
+        }
+      } catch {
+        // retain null
+      }
+    }
+
+    void fetchDetail()
+
+    return () => {
+      ignore = true
+    }
+  }, [currentRun, isMockMode])
+
+  const activeRun = (fetchedRun && fetchedRun.id === currentRun?.id && !currentRun?.scenario_snapshot) ? fetchedRun : currentRun
+  const scenario = activeRun?.scenario_snapshot
 
   // Empty state: no runs available
-  if (!currentRun || runs.length === 0) {
+  if (!activeRun || runs.length === 0) {
     return (
       <div className="app-content">
         <div
@@ -63,7 +102,7 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
     )
   }
 
-  const topology = deriveTopologySummary(scenario, currentRun?.metrics)
+  const topology = deriveTopologySummary(scenario, activeRun?.metrics)
   const computeNodes = topology.computeNodes
   const memoryPoolNodes = topology.memoryPoolNodes
   const links = topology.links
@@ -92,8 +131,8 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Select Run:</span>
             <select
-              value={currentRun.id}
-              onChange={(e) => setSelectedRunId(e.target.value)}
+              value={activeRun.id}
+              onChange={(e) => handleSelectRun(e.target.value)}
               style={{
                 backgroundColor: 'var(--bg-input)',
                 borderColor: 'var(--border-subtle)',
@@ -103,11 +142,14 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
                 borderRadius: 'var(--radius-sm)'
               }}
             >
-              {runs.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.scenario_name || r.id} ({r.policy_name})
-                </option>
-              ))}
+              {runs.map((r) => {
+                const shortId = r.id.length > 8 ? r.id.slice(0, 8) : r.id
+                return (
+                  <option key={r.id} value={r.id}>
+                    {r.scenario_name || r.id} ({r.policy_name}) — {shortId}
+                  </option>
+                )
+              })}
             </select>
           </div>
         </div>
@@ -126,7 +168,7 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
         >
           <AlertTriangle size={32} color="var(--accent-amber)" style={{ margin: '0 auto 12px auto' }} />
           <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
-            Scenario Hardware Definition Unavailable for {currentRun.id}
+            Scenario Hardware Definition Unavailable for {activeRun.id}
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto' }}>
             The simulation engine manifest did not bundle an authentic scenario configuration for this run. Hardware topology cannot be fabricated.
@@ -149,7 +191,7 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Badge variant="teal">
-                {scenario.name || currentRun.scenario_name || 'Scenario Fabric'}
+                {scenario.name || activeRun.scenario_name || 'Scenario Fabric'}
               </Badge>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 {computeNodes.length} Compute Host{computeNodes.length !== 1 ? 's' : ''} &bull; {memoryPoolNodes.length} Disaggregated Memory Pool{memoryPoolNodes.length !== 1 ? 's' : ''} &bull; {links.length} Interconnect Link{links.length !== 1 ? 's' : ''}
@@ -157,11 +199,11 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', color: 'var(--text-muted)' }}>
-              <span>Seed: <strong style={{ color: 'var(--text-primary)' }}>{scenario.seed ?? currentRun.seed ?? '—'}</strong></span>
+              <span>Seed: <strong style={{ color: 'var(--text-primary)' }}>{scenario.seed ?? activeRun.seed ?? '—'}</strong></span>
               <span>Page Size: <strong style={{ color: 'var(--text-primary)' }}>{scenario.page_size_bytes ? formatBytes(scenario.page_size_bytes) : '—'}</strong></span>
               <span>
-                Fabric Util: <strong style={{ color: currentRun.metrics.fabric_utilization != null ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
-                  {currentRun.metrics.fabric_utilization != null ? formatPercent(currentRun.metrics.fabric_utilization) : 'Unavailable'}
+                Fabric Util: <strong style={{ color: activeRun.metrics.fabric_utilization != null ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                  {activeRun.metrics.fabric_utilization != null ? formatPercent(activeRun.metrics.fabric_utilization) : 'Unavailable'}
                 </strong>
               </span>
             </div>
@@ -218,8 +260,8 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
                     </div>
                     <div>
                       <span style={{ color: 'var(--text-muted)' }}>Local Hit Ratio: </span>
-                      <strong style={{ color: currentRun.metrics.local_hit_ratio != null ? 'var(--accent-teal)' : 'var(--text-muted)' }}>
-                        {currentRun.metrics.local_hit_ratio != null ? formatPercent(currentRun.metrics.local_hit_ratio) : 'Unavailable'}
+                      <strong style={{ color: activeRun.metrics.local_hit_ratio != null ? 'var(--accent-teal)' : 'var(--text-muted)' }}>
+                        {activeRun.metrics.local_hit_ratio != null ? formatPercent(activeRun.metrics.local_hit_ratio) : 'Unavailable'}
                       </strong>
                     </div>
                   </div>
@@ -380,7 +422,7 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
                 <span>Configured Hardware Memory Tiers</span>
               </div>
               <div className="card-subtitle">
-                Exact timing and capacity values configured in {scenario.name || currentRun.id}
+                Exact timing and capacity values configured in {scenario.name || activeRun.id}
               </div>
             </div>
           </div>
