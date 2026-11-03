@@ -262,6 +262,21 @@ class AssistantContract(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertIsNone(r.json()["suggested_patch"])
 
+    def test_chat_suggest_patch_sees_scenario(self):
+        # Patch paths verify against the scenario, so the model must see it:
+        # without the scenario in context it can only guess paths from
+        # telemetry field names (e.g. /policy/requested, which is rejected).
+        rid = self._run_id()
+        FakeClient.chunks = [{"choices": [{"delta": {"content": "ok"}}]}]
+        r = self.c.post("/assistant/chat", json={
+            "messages": [], "context": {"run_id": rid},
+            "suggest_patch": True})
+        self.assertEqual(r.status_code, 200, r.text)
+        system = FakeClient.seen_messages[0]["content"]
+        self.assertIn("Run scenario JSON", system)
+        # policy.name exists only in the scenario, never in telemetry.
+        self.assertIn('"name": "swap_remote"', system)
+
     def test_chat_suggest_patch_needs_run_and_no_stream(self):
         r = self.c.post("/assistant/chat", json={
             "messages": [], "suggest_patch": True})

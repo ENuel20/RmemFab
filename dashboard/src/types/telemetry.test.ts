@@ -21,6 +21,9 @@ function createMinimalSummary(id: string, overrides: Partial<RunSummary> = {}): 
     rejected: null,
     p50: null,
     p95: null,
+    p99: null,
+    mean: null,
+    max: null,
     remote_read_bytes: null,
     migration_bytes: null,
     created_at: null,
@@ -285,3 +288,61 @@ function DetailWithoutServing(detail: RunDetail): RunDetail {
   delete summary.serving
   return { ...detail, summary }
 }
+test('9. List-strip tail latency (p99/mean/max) populates percentiles without detail fetch', () => {
+  const summary = createMinimalSummary('live-run-108', {
+    p50: 120, p95: 350, p99: 980, mean: 140, max: 1500
+  })
+
+  const run = adaptRunSummaryToSimulationRun(summary, null, [])
+
+  assert.equal(run.metrics.latency_ns.p50, 120)
+  assert.equal(run.metrics.latency_ns.p95, 350)
+  assert.equal(run.metrics.latency_ns.p99, 980)
+  assert.equal(run.metrics.latency_ns.mean, 140)
+  assert.equal(run.metrics.latency_ns.max, 1500)
+})
+
+test('10. Recorded per-window latency maps to series points; empty windows stay undefined', () => {
+  const summary = createMinimalSummary('live-run-109')
+  const detail: RunDetail = {
+    run_id: 'live-run-109',
+    status: 'completed',
+    summary: {},
+    manifest: {},
+    error: null
+  }
+  const base = {
+    accesses: 10,
+    evictions: 0,
+    completed: 10,
+    local_used_pages: { 'node-0': 5 },
+    pool_used_pages: 15,
+    link_bytes: {}
+  }
+  const rawSeries: SeriesPoint[] = [
+    { t_ns: 0, ...base },
+    {
+      t_ns: 1000000, ...base,
+      latency_ns: { count: 4, mean: 150, min: 100, max: 300, p50: 120, p95: 280, p99: 300 }
+    },
+    {
+      t_ns: 2000000, ...base,
+      latency_ns: { count: 0, mean: 0, min: 0, max: 0, p50: 0, p95: 0, p99: 0 }
+    }
+  ]
+
+  const run = adaptRunSummaryToSimulationRun(summary, detail, rawSeries)
+
+  assert.equal(run.time_series.length, 3)
+  // No recorded window stats: nothing mapped (test 3 behaviour preserved)
+  assert.equal(run.time_series[0].p50_latency_ns, undefined)
+  assert.equal(run.time_series[0].p99_latency_ns, undefined)
+  // Recorded window: exact passthrough
+  assert.equal(run.time_series[1].p50_latency_ns, 120)
+  assert.equal(run.time_series[1].p95_latency_ns, 280)
+  assert.equal(run.time_series[1].p99_latency_ns, 300)
+  // Empty window: count 0 means no measurement, never a zero line
+  assert.equal(run.time_series[2].p50_latency_ns, undefined)
+  assert.equal(run.time_series[2].p95_latency_ns, undefined)
+  assert.equal(run.time_series[2].p99_latency_ns, undefined)
+})

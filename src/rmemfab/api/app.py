@@ -420,6 +420,14 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
                                 "\n\nNo run telemetry provided.")
         if req.suggest_patch:
             system += "\n\n" + SUGGEST_SUFFIX
+            # Patch paths verify against the scenario, so the model must see
+            # it: telemetry field names (policy.requested) are not scenario
+            # paths (policy.name). run_id is guaranteed above when suggesting.
+            scenario = runs.scenario_of(run_id)
+            if scenario is not None:
+                system += ("\n\nRun scenario JSON: emit patch ops as "
+                           "JSON-pointer paths into this object.\n"
+                           + json.dumps(scenario))
         messages = [{"role": "system", "content": system},
                     *req.messages]
         if not req.stream:

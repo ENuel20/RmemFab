@@ -63,6 +63,9 @@ export function validateRunSummary(item: unknown, index?: number): RunSummary {
     rejected: typeof obj.rejected === 'number' ? obj.rejected : null,
     p50: typeof obj.p50 === 'number' ? obj.p50 : null,
     p95: typeof obj.p95 === 'number' ? obj.p95 : null,
+    p99: typeof obj.p99 === 'number' ? obj.p99 : null,
+    mean: typeof obj.mean === 'number' ? obj.mean : null,
+    max: typeof obj.max === 'number' ? obj.max : null,
     local_hit_ratio: typeof obj.local_hit_ratio === 'number' ? obj.local_hit_ratio : null,
     remote_hit_ratio: typeof obj.remote_hit_ratio === 'number' ? obj.remote_hit_ratio : null,
     fabric_utilization: typeof obj.fabric_utilization === 'number' ? obj.fabric_utilization : null,
@@ -168,6 +171,10 @@ export function validateSeriesPoints(data: unknown, runId?: string): SeriesPoint
       throw new ContractError(endpoint, `Series point at index ${idx} missing 'link_bytes' mapping`)
     }
 
+    const win = pt.latency_ns as Record<string, unknown> | undefined
+    const winOk = win && typeof win === 'object' && typeof win.count === 'number'
+    const winNum = (k: string): number | undefined => (winOk && typeof win[k] === 'number' ? (win[k] as number) : undefined)
+
     return {
       t_ns: pt.t_ns,
       accesses: pt.accesses,
@@ -177,7 +184,17 @@ export function validateSeriesPoints(data: unknown, runId?: string): SeriesPoint
       local_used_pages: pt.local_used_pages as Record<string, number>,
       pool_used_pages: pt.pool_used_pages,
       pools_used_pages: pt.pools_used_pages && typeof pt.pools_used_pages === 'object' ? (pt.pools_used_pages as Record<string, number>) : undefined,
-      link_bytes: pt.link_bytes as Record<string, number>
+      link_bytes: pt.link_bytes as Record<string, number>,
+      latency_ns: winOk ? {
+        count: win.count as number,
+        mean: winNum('mean'),
+        min: winNum('min'),
+        max: winNum('max'),
+        p50: winNum('p50'),
+        p90: winNum('p90'),
+        p95: winNum('p95'),
+        p99: winNum('p99')
+      } : undefined
     }
   })
 }

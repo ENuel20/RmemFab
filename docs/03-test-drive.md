@@ -91,12 +91,31 @@ before its test passes.
   silently fixed."
 
 ## Test 5 — Synthetic workload + cost (capability §5)
-- Status: pending
-- Commands: —
-- Dashboard: —
-- Insight: —
-- Tweak: —
-- Pitch line: —
+- Status: done
+- Commands: 3 variants of `examples/eight-node-rdma-pool.json`
+  (kv_cache_decode, GQA-32L, seed 7) with pool 1/8/64 GiB +
+  illustrative `cost_model` (unit currency) → `/tmp/test5_cap*.json`
+  → `runs/dc713d4f278a-…`, `runs/4ecc41fbdb31-…`,
+  `runs/92263171338d-…` (8 nodes × 0.38 GiB local, 25 arrivals each)
+- Dashboard: Runs → three `test5-pool-*` rows; detail → requests
+  rejected 9/1/0, pool peak pages 484/3881/4138, summary `cost`
+  block (capacity/transfer/migration/total). Guard correctly refuses
+  cross-capacity compares (`nodes.8.remote_memory.capacity_bytes
+  (1073741824 vs 8589934592)`, exit 2) — read summaries directly
+- Insight: the knee is in admission, not p50 (identical 7156 ns all
+  three): 1 GiB rejects 9/25 ("remote pool exhausted"), 8 GiB
+  rejects 1, 64 GiB zero — but 8→64 buys nothing else while
+  migration explodes 2.4→139 GB once the pool can absorb churn, and
+  cost total doubles 23.4→51.2 units on the migration term. Cost
+  prices used GiB·seconds + measured bytes, parametric/illustrative
+  (limitation 20 — never dollars). Warning recorded: no
+  fabric.switch ⇒ unbounded bisection assumed
+- Tweak: raise `arrival_rate_per_second` to push the reject cliff
+  right; or raise `migration_per_gib` and watch the model flip the
+  recommendation against big pools
+- Pitch line: "Eight gibibytes ends the rejection cliff — sixty-four
+  buys nothing but a migration bill. The cost model prices the churn
+  your capacity plan would otherwise hide."
 
 ## Test 6 — Assistant loop (capability §6)
 - Status: pending
@@ -133,9 +152,40 @@ before its test passes.
   full measured record on demand — nothing shown is ever filled in."
 
 ## Test 7 — Fault drill (capability §7)
-- Status: pending
-- Commands: —
-- Dashboard: —
-- Insight: —
-- Tweak: —
-- Pitch line: —
+- Status: done
+- Commands: `rmemfab run examples/phase5-fault-recovery.json --out
+  runs/043424bff09d-s7-swap_remote` + repeat to /tmp → all 4 files
+  byte-identical; clean baseline (faults zeroed, `/tmp/test7_clean.json`)
+  → `runs/0f6c854d47ec-s7-swap_remote`
+- Dashboard: Runs → `phase5-fault-recovery` detail → degraded panel
+  (2 windows · 4 stalled · 4 lost/4 retried, 9.67 GB, RTO 3600 ns);
+  series flag strip 0→1→2→1→0; events `link_degraded/restored`,
+  `node_fail/recover`, `transfer_lost` ×4, `request_stalled` ×4
+  (adapter path verified — no fix needed)
+- Insight: drill is survival + telemetry, honestly: node 4–5s +
+  link 3–6s (½ bw, 2× lat) + 2% loss ⇒ 4 parked (0 rejected),
+  4 retransmitted, access mean +5.5% vs clean, 13% fewer accesses
+  in-window. 0 completions in BOTH runs = 10 s window too short for
+  this workload, not a fault effect — present park-not-reject, never
+  drain-to-complete. Deterministic faults: rerun diff clean
+- Tweak: stretch `duration_ns` 2× and watch parked requests drain to
+  completed; or raise loss ppm and watch retx bytes climb linearly
+- Pitch line: "Kill a node, halve a link, lose 2% of packets — four
+  requests park, zero die, every byte retransmitted, and the rerun
+  is bit-for-bit identical."
+
+## Detour 3 — Per-window latency + tail strips adopted (after Test 7)
+- Branch-lane agent's feature arrived in main's tree mid-drive at user
+  order (engine `win_read` histogram per series row; strip +p99/mean/
+  max; dashboard mappings + validators; `TestWindowLatency` ×4).
+  Triaged green: backend 204/204, dashboard 60/60, tsc/eslint clean.
+- Determinism intact: fresh double-run byte-identical on all 4 files;
+  `summary.json` still sha256 `5b6ce4d94d1714c7` (Test 1 claim stands,
+  no re-baseline). Only NEW `series.jsonl` rows gain `latency_ns`;
+  old bundles validate unchanged. Empty windows map to gaps, never
+  zero lines; count-0 carries no fake values.
+- Dashboard: history gains a p95 column; p99 lights up from the strip;
+  the "honestly absent" per-window percentile notes in Detours 1–2 now
+  apply to old bundles only.
+- Pitch line: "The gap the log called honestly absent is now honestly
+  filled — recorded windows, gaps where idle, old runs untouched."

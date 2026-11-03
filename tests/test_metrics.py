@@ -42,5 +42,53 @@ class TestDenominator(unittest.TestCase):
         self.assertEqual(summary["traffic"]["remote_read_bytes"], 0)
 
 
+class TestWindowLatency(unittest.TestCase):
+    """Per-window read latency is recorded (steady-state), never zero-filled."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.out = tempfile.mkdtemp(prefix="rmemfab-winlat-")
+        path = tmp_scenario("phase1-overflow.json")
+        cls.summary, _ = run_engine(path, cls.out, event_log=False)
+        cls.series = read_jsonl(f"{cls.out}/series.jsonl")
+
+    def test_rows_carry_window_latency(self):
+        want = set(self.summary["access"]["latency_ns"])
+        self.assertIn("count", want)
+        for row in self.series:
+            self.assertIn("latency_ns", row)
+            self.assertEqual(set(row["latency_ns"]), want)
+
+    def test_window_counts_sum_to_steady_reads(self):
+        total = sum(row["latency_ns"]["count"] for row in self.series)
+        self.assertEqual(total, self.summary["access"]["count"])
+
+    def test_empty_windows_carry_no_fake_values(self):
+        pct_keys = sorted(
+            (k for k in self.summary["access"]["latency_ns"] if k.startswith("p")),
+            key=lambda k: float(k[1:]))
+        self.assertGreater(len(pct_keys), 0)
+        seen_full = False
+        for row in self.series:
+            w = row["latency_ns"]
+            if w["count"] == 0:
+                self.assertEqual(w["mean"], 0.0)
+                self.assertEqual(w["max"], 0.0)
+            else:
+                seen_full = True
+                vals = [w[k] for k in pct_keys]
+                self.assertEqual(vals, sorted(vals))
+                self.assertGreater(w["max"], 0.0)
+        self.assertTrue(seen_full)
+
+    def test_window_latency_deterministic(self):
+        out2 = tempfile.mkdtemp(prefix="rmemfab-winlat2-")
+        path = tmp_scenario("phase1-overflow.json")
+        run_engine(path, out2, event_log=False)
+        with open(f"{self.out}/series.jsonl", "rb") as f1, \
+                open(f"{out2}/series.jsonl", "rb") as f2:
+            self.assertEqual(f1.read(), f2.read())
+
+
 if __name__ == "__main__":
     unittest.main()
