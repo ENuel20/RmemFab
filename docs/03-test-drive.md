@@ -205,3 +205,95 @@ before its test passes.
   serving section (ttft/tpot/itl/compute) verified via API.
 - Pitch line: "One main, one dashboard — memory science and serving
   telemetry side by side, every old number intact."
+
+## Detour 4 — assistant always proposes (retry-on-empty + permit reframe)
+- Symptom: "Propose one policy change ... emit a patch block" on the
+  eight-node duel returned an empty bubble — provider returned zero
+  content bytes though the constructed request was valid (14KB prompt,
+  scenario attached). Same failure shape as an earlier silent drop.
+- Root cause: `chat_stream` capped output at `max_tokens=2000` while
+  the non-streaming `chat()` used 8000. Muse Spark is a reasoning
+  model: on the heavy suggest prompt (telemetry + suffix + full
+  scenario JSON) it spent the whole 2000-token budget on hidden
+  reasoning and emitted zero content tokens. Short Q&A prompts fit,
+  which is why only propose-patch went blank. The codebase already
+  knew this failure shape (`providers.py` names it for `chat()`).
+- Fix (server-side, dashboard untouched): stream budget raised to
+  8000 to match `chat()`; `/assistant/chat` non-streaming retries
+  one empty completion immediately and returns an explicit 502 with
+  chunk/finish-reason diagnostics if the retry is also empty — blank
+  bubbles are now impossible. Suggest
+  suffix reframed from blanket caution to permit-to-propose: it names
+  the real scenario paths to verify against (/policy/name,
+  /policy/params, /seed), states that a directional suggestion the
+  user will run and compare is itself the safe action (server
+  revalidates before anything runs), and reserves refusal for false
+  premises (a policy the run did not use).
+- Added 3 contract tests: retry-once recovery, persistent-empty 502,
+  suffix names /policy/name. Full gates re-run (backend + dashboard
+  + tsc/eslint).
+- Tweak: if the duel's tied policies make a proposal feel arbitrary,
+  say which direction to test (e.g. "raise the hot/cold threshold")
+  — the patch pins /policy/params instead.
+- Pitch line: "The assistant always leaves you with a next experiment
+  — and the server checks the patch before anything runs."
+
+## Maya rehearsal — contention what-if + prefetch crossover (all measured)
+- Base `duel-swap` @200 Gbps: p50 7.2us, p99 89.6us. Constrained
+  clone @50 Gbps (`maya-contention-swap`): p99 343.3us — 3.8x tail
+  blowup from bandwidth alone; guard correctly refused cross-fabric
+  compare until workload/hardware held fixed (description-mismatch
+  refusal quoted verbatim in session).
+- Stressed pair (50 Gbps, 4x pressure): aggressive prefetch
+  (degree 4, 352 issued, 27% accuracy, 537MB wasted) vs swap —
+  local-hit +2pp but mean latency +8.4% (16.65ms -> 18.04ms) and
+  stall +3.3%. Fixture hypothesis inverted honestly: prefetch helps
+  locality, hurts the mean under contention; p99 quantized flat at
+  343.3us on both. Gentle prefetch (127 issued, 89% accuracy) and
+  the stock `policy-prefetch-failure` pair showed no tail split —
+  reported as-is, not forced.
+- Act 6 verified: `rmemfab export <bundle> --out <dir> --format csv`
+  writes summary.csv + series.csv; scenario.json rides in the bundle.
+- Pitch line: "Cut the fabric to 50 gigabits and the tail quadruples;
+  turn prefetch aggressive and the mean gets 8% worse — the dashboard
+  shows you which knob did it."
+
+## Detour 5 — NL draft failed silently, then opaquely (fixed both ends)
+- User's Maya prompt failed with bare "draft failed validation":
+  dashboard formatter returned the headline and discarded the
+  server's per-field errors. Fixed `apiErrorMessage` to append up to
+  5 field errors (+N more); moved it to leaf `apiErrors.ts` so the
+  node test runner can import it (api.ts has bare imports); 3 new
+  dashboard tests, 81/81 green, tsc/eslint clean.
+- Revealed cause: model invented 8 `metrics.*` fields (p99 knobs,
+  contention, utilization) from "show me p99" — but the schema
+  allows only percentiles/sample_interval_ns/warmup_ns, and the old
+  SYSTEM prompt named `metrics{}` without defining it. Fixed prompt
+  to name allowed fields + "things the user wants to SEE are outputs,
+  never config". Endpoint now repairs once: validation errors go
+  back to the model with a fix-only-these instruction before any
+  422. 2 new backend tests (scripted invalid->valid, prompt pins
+  fields); assistant suite 26/26.
+- Pitch line: "The AI drafts the experiment, the validator checks it,
+  and when the first draft is wrong it fixes itself before you see
+  an error."
+
+## Detour 6 — dashboard rejected switch link endpoints the server accepts
+- Maya draft (64GB local / 256GB remote, predictive_prefetch, p50/95/99
+  percentiles) passed server validation but the builder flagged both
+  links: client check 2A tested endpoints against node ids only,
+  while the server allows `node_ids | switches` (legacy single
+  switch implicitly `switch-0`). Fixed `validation.ts` to mirror the
+  server set; regression test 7 covers named + legacy forms.
+- Dashboard 82/82, tsc/eslint clean.
+- Pitch line: "The validator argued with itself — now both sides read
+  the same rulebook."
+
+## Detour 7 — draft hit "reasoning consumed the budget" (auto-escalation)
+- Long draft prompts exhausted the 8000-token output budget in hidden
+  reasoning before any JSON, surfacing a raw provider error. Default
+  draft budget raised to 16000; on empty-content the server retries
+  once at double tokens instead of failing. Other provider errors
+  still 502 honestly. 2 new backend tests; assistant+API 49/49.
+- Pitch line: "When the model thinks too long, the server gives it
+  more room instead of giving you an error."

@@ -8,7 +8,7 @@ import type {
   ProvenanceConfig,
   ProvenanceKind
 } from '../../types/scenario'
-import { LLAMA_70B_CXL_SCENARIO } from '../../services/mockData'
+import { MUSE_GLIMMER_CXL_SCENARIO } from '../../services/mockData'
 import { apiClient, apiErrorMessage, type ValidateResponse } from '../../services/api'
 import type { DraftResponse } from '../../types/telemetry'
 import { validateScenario, type ValidationError } from '../../utils/validation'
@@ -155,7 +155,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<BuilderTab>('general')
   const [scenario, setScenario] = useState<ScenarioConfig>(() =>
-    JSON.parse(JSON.stringify(LLAMA_70B_CXL_SCENARIO))
+    JSON.parse(JSON.stringify(MUSE_GLIMMER_CXL_SCENARIO))
   )
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
@@ -478,10 +478,10 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
 
   // Reset to example preset
   const handleReset = () => {
-    const clone = JSON.parse(JSON.stringify(LLAMA_70B_CXL_SCENARIO))
+    const clone = JSON.parse(JSON.stringify(MUSE_GLIMMER_CXL_SCENARIO))
     setScenario(clone)
     validateCurrent(clone)
-    onNotify('Reset editor to Llama-70B CXL scenario', 'info')
+    onNotify('Reset editor to Muse-Glimmer CXL scenario', 'info')
   }
 
   // Compute KV cache estimated size per token
@@ -527,10 +527,10 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
             <button
               className="btn btn-sm btn-outline"
               onClick={() => handleReset()}
-              title="Load Llama-70B 4-node CXL benchmark"
+              title="Load Muse-Glimmer 4-node CXL benchmark"
             >
               <RotateCcw size={13} />
-              <span>Load Llama-70B</span>
+              <span>Load Muse Glimmer</span>
             </button>
             <button
               className="btn btn-sm btn-secondary"
@@ -834,7 +834,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                 type="text"
                 value={scenario.name}
                 onChange={(e) => updateGeneral('name', e.target.value)}
-                placeholder="e.g. llama-70b-cxl"
+                placeholder="e.g. muse-glimmer-cxl"
               />
               <span className="form-help">Max 120 characters, used in manifests and logs</span>
             </div>
@@ -1388,7 +1388,7 @@ export const ScenarioBuilderView: React.FC<ScenarioBuilderViewProps> = ({
                       })
                     }
                   }}
-                  placeholder="e.g. llama-3-70b"
+                  placeholder="e.g. meta-models/Muse-Glimmer-30B"
                 />
               </div>
 

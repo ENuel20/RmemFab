@@ -372,14 +372,20 @@ export function adaptRunSummaryToSimulationRun(
   const sum = detail?.summary as EngineSummary | null | undefined
   const man = detail?.manifest as EngineManifest | null | undefined
 
-  // 1. Latency percentiles: from access.latency_ns or summary strip, never defaulted to 0
+  // 1. Latency percentiles: from access.latency_ns or summary strip, never defaulted to 0.
+  // Zero accesses in detail means unmeasured (the engine writes literal zeros):
+  // map time metrics to null so "0 ns" never reads as "instant". Thin strips
+  // carry no count, so the fallback stays as served.
   const lat = sum?.access?.latency_ns
-  const p50 = typeof lat?.p50 === 'number' ? lat.p50 : (typeof summary.p50 === 'number' ? summary.p50 : null)
-  const p90 = typeof lat?.p90 === 'number' ? lat.p90 : null
-  const p95 = typeof lat?.p95 === 'number' ? lat.p95 : (typeof summary.p95 === 'number' ? summary.p95 : null)
-  const p99 = typeof lat?.p99 === 'number' ? lat.p99 : (typeof summary.p99 === 'number' ? summary.p99 : null)
-  const mean = typeof lat?.mean === 'number' ? lat.mean : (typeof summary.mean === 'number' ? summary.mean : null)
-  const max = typeof lat?.max === 'number' ? lat.max : (typeof summary.max === 'number' ? summary.max : null)
+  const unmeasured = sum?.access?.count === 0
+  const pick = (v: unknown, fb: unknown): number | null =>
+    unmeasured ? null : (typeof v === 'number' ? v : (typeof fb === 'number' ? fb : null))
+  const p50 = pick(lat?.p50, summary.p50)
+  const p90 = unmeasured ? null : (typeof lat?.p90 === 'number' ? lat.p90 : null)
+  const p95 = pick(lat?.p95, summary.p95)
+  const p99 = pick(lat?.p99, summary.p99)
+  const mean = pick(lat?.mean, summary.mean)
+  const max = pick(lat?.max, summary.max)
 
   // 2. Access counters & ratios: detail first, list-strip fallback, null if not measured
   const localHitRatio = typeof sum?.access?.local_hit_ratio === 'number'
@@ -389,7 +395,9 @@ export function adaptRunSummaryToSimulationRun(
     ? sum.access.remote_hit_ratio
     : (typeof summary.remote_hit_ratio === 'number' ? summary.remote_hit_ratio : null)
   const missRatio = typeof sum?.access?.miss_ratio === 'number' ? sum.access.miss_ratio : null
-  const stallTimeNs = typeof sum?.access?.stall_ns === 'number' ? sum.access.stall_ns : null
+  const stallTimeNs = unmeasured
+    ? null
+    : (typeof sum?.access?.stall_ns === 'number' ? sum.access.stall_ns : null)
   const totalAccesses = typeof sum?.access?.count === 'number' ? sum.access.count : null
 
   // 3. Traffic volume: null if not measured

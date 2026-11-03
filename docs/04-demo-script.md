@@ -7,7 +7,9 @@ script runs clean 3 times in a row.
 ## Pre-demo checklist (2 min before)
 
 - Backend: `PYTHONPATH=src .venv/bin/python -m rmemfab serve` → `:8000`,
-  default `./runs` (13 demo runs, zero `phase7`). `curl
+  default `./runs` (26 runs: duel trio, maya contention/prefetch/
+  stressed families, phase1/2/5/7, test5/7 — catalogued in
+  `docs/05-test-runs.md`). `curl
   http://127.0.0.1:8000/health` → `{"status":"ok",...}`.
 - Dashboard: `npm run dev` in `dashboard/` → `:5173`, badge reads
   **Live Data** (not Demo Dataset).

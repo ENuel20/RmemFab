@@ -75,17 +75,28 @@ export function validateScenario(scenario: unknown): { isValid: boolean; errors:
     }
 
     const fabric = sc.fabric as Record<string, unknown>
+    // Endpoints may name nodes or switches (server: endpoints =
+    // node_ids | switches; legacy single switch is implicitly switch-0).
+    const endpointIds = new Set(nodeIds)
+    if (fabric.switch && typeof fabric.switch === 'object') {
+      endpointIds.add('switch-0')
+    }
+    if (Array.isArray(fabric.switches)) {
+      for (const s of fabric.switches as Array<Record<string, unknown>>) {
+        if (s && typeof s.id === 'string') endpointIds.add(s.id)
+      }
+    }
     if (Array.isArray(fabric.links)) {
       const links = fabric.links as Array<Record<string, unknown>>
       links.forEach((l, idx) => {
         if (l && typeof l === 'object') {
-          if (typeof l.from === 'string' && !nodeIds.has(l.from)) {
+          if (typeof l.from === 'string' && !endpointIds.has(l.from)) {
             errors.push({
               field: `/fabric/links/${idx}/from`,
               message: `Link source "${l.from}" does not exist in declared nodes list`
             })
           }
-          if (typeof l.to === 'string' && !nodeIds.has(l.to)) {
+          if (typeof l.to === 'string' && !endpointIds.has(l.to)) {
             errors.push({
               field: `/fabric/links/${idx}/to`,
               message: `Link destination "${l.to}" does not exist in declared nodes list`

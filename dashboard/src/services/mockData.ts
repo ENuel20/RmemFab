@@ -1,17 +1,18 @@
 /**
  * Authentic Mock Telemetry and Scenario Presets
- * Generated according to SPECS/config.schema.json, examples/llama-70b-cxl.json,
- * and discrete-event simulation models.
+ * Generated according to SPECS/config.schema.json, the measured Muse Glimmer
+ * geometry (examples/experiments/muse-glimmer-stress/manifests/), and
+ * discrete-event simulation models.
  */
 
 import type { ScenarioConfig } from '../types/scenario'
 import type { SimulationRun, TimeSeriesPoint } from '../types/telemetry'
 
-export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
+export const MUSE_GLIMMER_CXL_SCENARIO: ScenarioConfig = {
   $schema: '../SPECS/config.schema.json',
   version: '0.1',
-  name: 'llama-70b-cxl',
-  description: 'Four compute nodes serving Llama-3-70B with a shared CXL-attached memory pool. Compares a hot/cold placement policy against local-only and swap baselines.',
+  name: 'muse-glimmer-cxl',
+  description: 'Four compute nodes serving Muse-Glimmer-30B (52-layer GQA geometry per measured manifest) with a shared CXL-attached memory pool. Compares a hot/cold placement policy against local-only and swap baselines.',
   seed: 42,
   duration_ns: 60000000000,
   warmup_ns: 5000000000,
@@ -131,11 +132,11 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
     type: 'synthetic',
     profile: 'kv_cache_decode',
     model: {
-      name: 'llama-3-70b',
-      family: 'llama',
-      layers: 80,
-      attention_heads: 64,
-      kv_heads: 8,
+      name: 'meta-models/Muse-Glimmer-30B',
+      family: 'muse',
+      layers: 52,
+      attention_heads: 32,
+      kv_heads: 2,
       head_dim: 128,
       dtype_bytes: 2
     },
@@ -173,7 +174,7 @@ export const LLAMA_70B_CXL_SCENARIO: ScenarioConfig = {
   },
   output: {
     format: 'jsonl',
-    path: 'runs/llama-70b-cxl',
+    path: 'runs/muse-glimmer-cxl',
     include_event_log: true
   }
 }
@@ -229,8 +230,8 @@ function generateTimeSeries(
 
 export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
   {
-    id: 'run-llama-cxl-hotcold',
-    scenario_name: 'llama-70b-cxl',
+    id: 'run-muse-glimmer-cxl-hotcold',
+    scenario_name: 'muse-glimmer-cxl',
     scenario_hash: 'sha256:7f9b8c2a3d4e5f60',
     workload_profile: 'kv_cache_decode',
     policy_name: 'hot_cold',
@@ -266,11 +267,11 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       explanation: 'Hot/Cold EWMA successfully maintains active KV cache heads in local DRAM (71.4% local hit ratio). Fabric utilization averages 42.6% with periodic migration bursts.',
       suggested_policy_tuning: 'Increase min_residency_ns from 10ms to 25ms to reduce marginal page migrations during bursty prompt phases.'
     },
-    scenario_snapshot: LLAMA_70B_CXL_SCENARIO
+    scenario_snapshot: MUSE_GLIMMER_CXL_SCENARIO
   },
   {
-    id: 'run-llama-cxl-swap',
-    scenario_name: 'llama-70b-cxl',
+    id: 'run-muse-glimmer-cxl-swap',
+    scenario_name: 'muse-glimmer-cxl',
     scenario_hash: 'sha256:3a4b5c6d7e8f9012',
     workload_profile: 'kv_cache_decode',
     policy_name: 'swap_remote',
@@ -307,7 +308,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       suggested_policy_tuning: 'Replace reactive swap with proactive hot/cold promotion or predictive prefetching to hide CXL link latency.'
     },
     scenario_snapshot: {
-      ...LLAMA_70B_CXL_SCENARIO,
+      ...MUSE_GLIMMER_CXL_SCENARIO,
       policy: {
         name: 'swap_remote',
         params: {}
@@ -315,8 +316,8 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
     }
   },
   {
-    id: 'run-llama-cxl-localonly',
-    scenario_name: 'llama-70b-cxl',
+    id: 'run-muse-glimmer-cxl-localonly',
+    scenario_name: 'muse-glimmer-cxl',
     scenario_hash: 'sha256:1122334455667788',
     workload_profile: 'kv_cache_decode',
     policy_name: 'local_only',
@@ -353,7 +354,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       suggested_policy_tuning: 'Attach CXL pooled memory with hot/cold tiering to prevent context drops.'
     },
     scenario_snapshot: {
-      ...LLAMA_70B_CXL_SCENARIO,
+      ...MUSE_GLIMMER_CXL_SCENARIO,
       policy: {
         name: 'local_only',
         params: {}
@@ -398,7 +399,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       explanation: 'Popular Zipf experts are kept in local DRAM. The tail 20% expert activations traverse the 2.5 µs RDMA fabric, dominating p99 tail latency.',
       suggested_policy_tuning: 'Increase protected fraction or implement speculative prefetching based on layer token routing predictions.'
     },
-    scenario_snapshot: LLAMA_70B_CXL_SCENARIO
+    scenario_snapshot: MUSE_GLIMMER_CXL_SCENARIO
   },
   {
     id: 'run-moe-rdma-faults',
@@ -438,7 +439,7 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       explanation: 'At t=45s simulated NIC fault on node-3 and t=70s degradation on link node-2-rdma caused fabric queue saturation and TCP/RoCE packet loss retries.',
       suggested_policy_tuning: 'Enable fault-tolerant multi-path routing across parallel RDMA links.'
     },
-    scenario_snapshot: LLAMA_70B_CXL_SCENARIO
+    scenario_snapshot: MUSE_GLIMMER_CXL_SCENARIO
   },
   {
     id: 'run-sparse-predictive',
@@ -480,16 +481,16 @@ export const MOCK_SIMULATION_RUNS: SimulationRun[] = [
       suggested_policy_tuning: 'Raise confidence_threshold from 0.75 to 0.82 to eliminate marginal prefetches.'
     },
     scenario_snapshot: {
-      ...LLAMA_70B_CXL_SCENARIO,
+      ...MUSE_GLIMMER_CXL_SCENARIO,
       name: 'sparse-attention-prefetch',
       workload: {
         type: 'synthetic',
         profile: 'kv_cache_decode',
         model: {
-          name: 'llama-3-70b-sparse',
-          family: 'llama',
-          layers: 80,
-          kv_heads: 8,
+          name: 'meta-models/Muse-Glimmer-30B-sparse',
+          family: 'muse',
+          layers: 52,
+          kv_heads: 2,
           head_dim: 128
         }
       },

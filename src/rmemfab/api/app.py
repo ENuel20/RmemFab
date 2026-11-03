@@ -95,7 +95,7 @@ class RollbackRequest(BaseModel):
 class DraftRequest(BaseModel):
     prompt: str
     parent_version: str | None = None
-    max_tokens: int = 8000
+    max_tokens: int = 16000
 
 
 def _resolve_pointer(doc, pointer: str):
@@ -366,23 +366,47 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
             client = BasetenClient()
         except ProviderNotConfigured as exc:
             raise HTTPException(503, str(exc))
-        try:
-            out = client.chat(build_messages(req.prompt, parent),
-                              max_tokens=req.max_tokens, temperature=0,
-                              json_mode=True)
-        except ProviderError as exc:
-            raise HTTPException(502, str(exc))
-        try:
-            scenario = json.loads(out["content"])
-        except json.JSONDecodeError:
-            raise HTTPException(
-                422, {"error": "model output was not JSON",
-                      "raw_excerpt": out["content"][:1000]})
-        if not isinstance(scenario, dict):
-            raise HTTPException(
-                422, {"error": "model output was not an object",
-                      "raw_excerpt": out["content"][:1000]})
-        errors, warnings, assumed = validate(scenario, for_run=True)
+        messages = build_messages(req.prompt, parent)
+        scenario, errors, warnings = None, [], []
+        budget = req.max_tokens
+        for _attempt in range(2):
+            try:
+                out = client.chat(messages, max_tokens=budget,
+                                  temperature=0, json_mode=True)
+            except ProviderError as exc:
+                if "empty content" not in str(exc) or budget > req.max_tokens:
+                    raise HTTPException(502, str(exc))
+                # Reasoning ate the budget before any JSON: one retry at
+                # double tokens rather than surfacing the provider error.
+                budget = req.max_tokens * 2
+                try:
+                    out = client.chat(messages, max_tokens=budget,
+                                      temperature=0, json_mode=True)
+                except ProviderError as exc2:
+                    raise HTTPException(502, str(exc2))
+            try:
+                scenario = json.loads(out["content"])
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    422, {"error": "model output was not JSON",
+                          "raw_excerpt": out["content"][:1000]})
+            if not isinstance(scenario, dict):
+                raise HTTPException(
+                    422, {"error": "model output was not an object",
+                          "raw_excerpt": out["content"][:1000]})
+            errors, warnings, assumed = validate(scenario, for_run=True)
+            if not errors:
+                break
+            detail = "; ".join(
+                f"{e.get('path', '?')}: {e.get('message', e)}"
+                for e in [split_error(e) for e in errors][:8])
+            messages = [*messages,
+                        {"role": "assistant", "content": out["content"]},
+                        {"role": "user",
+                         "content": ("That draft was rejected by the "
+                                     "validator. Fix ONLY these errors and "
+                                     "output the corrected JSON object, no "
+                                     f"prose, no fences:\n{detail}")}]
         if errors:
             raise HTTPException(
                 422, {"error": "draft failed validation",
@@ -434,15 +458,34 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
         messages = [{"role": "system", "content": system},
                     *req.messages]
         if not req.stream:
-            try:
-                chunks = list(client.chat_stream(messages))
-            except ProviderError as exc:
-                raise HTTPException(502, str(exc))
             def _delta(c):
                 ch = (c.get("choices") or [{}])[0]
                 return (ch.get("delta") or {}).get("content", "") or ""
-            text = "".join(_delta(c) for c in chunks
-                            if isinstance(c, dict))
+            try:
+                text = ""
+                diag = "no chunks"
+                for _attempt in range(2):
+                    chunks = list(client.chat_stream(messages))
+                    text = "".join(_delta(c) for c in chunks
+                                    if isinstance(c, dict))
+                    if text.strip():
+                        break
+                    reasons = set()
+                    for c in chunks:
+                        if isinstance(c, dict):
+                            r = (c.get("choices") or [{}])[0].get(
+                                "finish_reason")
+                            if r:
+                                reasons.add(r)
+                    diag = (f"{len(chunks)} chunks"
+                            + (f", finish={sorted(reasons)}"
+                               if reasons else ", no finish reason"))
+            except ProviderError as exc:
+                raise HTTPException(502, str(exc))
+            if not text.strip():
+                raise HTTPException(
+                    502, f"assistant returned no content ({diag}); "
+                         "retry the request")
             body = {"content": text, "model": client.model,
                     "run_id": run_id}
             if req.suggest_patch:

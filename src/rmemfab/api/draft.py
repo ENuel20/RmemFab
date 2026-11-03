@@ -16,6 +16,13 @@ Required top level: version "0.1", name (string), seed (int), duration_ns
 (int), nodes[] , fabric{}, workload{}, policy{}. Optional: page_size_bytes
 (default 2097152), warmup_ns, metrics{}, output{}, cost_model{}.
 
+metrics allows ONLY: percentiles[] (e.g. [50, 95, 99]),
+sample_interval_ns, warmup_ns. Things the user wants to SEE after the run
+(p99 latency, contention, utilization, breakdowns) are computed outputs
+shown by the dashboard -- they are NEVER config fields, so do not add
+them. When unsure a field exists, omit it: the schema rejects unknown
+properties.
+
 nodes[]: {id, role} where role is compute or memory. A compute node needs
 local_memory{capacity_bytes, latency_ns, bandwidth_bytes_per_ns}. A memory
 node needs remote_memory{capacity_bytes, latency_ns, bandwidth_bytes_per_ns}.
@@ -61,9 +68,17 @@ JSON patch in exactly one fenced block:
 [{"op": "replace", "path": "/seed", "value": 11}]
 ```
 
-Ops are replace/add/remove against the run's scenario (JSON-pointer paths).
-Emit the block only for changes you actually recommend; the server validates
-the patch and reports errors, so never claim a change was applied."""
+Ops are replace/add/remove against the run's scenario (JSON-pointer paths),
+and the scenario JSON is appended after this suffix: verify every path
+against it. Telemetry field names (policy.requested/policy.effective) do
+NOT exist in the scenario and will be rejected. Common patchable paths:
+/policy/name for the policy string, /policy/params for its parameter
+object, /seed for the seed. Prefer the smallest change that tests the
+user's question; a directional suggestion the user will run and compare
+is itself the safe action, and the server revalidates before anything
+runs, so never claim a change was applied. Only refuse a patch when the
+request contradicts the telemetry (for example, it names a policy the
+run did not use): say so and emit no patch."""
 
 
 def extract_patch_block(text: str):

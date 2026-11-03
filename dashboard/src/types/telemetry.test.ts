@@ -346,3 +346,35 @@ test('10. Recorded per-window latency maps to series points; empty windows stay 
   assert.equal(run.time_series[2].p95_latency_ns, undefined)
   assert.equal(run.time_series[2].p99_latency_ns, undefined)
 })
+
+test('11. Zero-access run summaries map time metrics to null, never 0 (mirrors test 10)', () => {
+  const summary = createMinimalSummary('live-run-110', { p50: 0, p95: 0, p99: 0, mean: 0, max: 0 })
+  const detail: RunDetail = {
+    run_id: 'live-run-110',
+    status: 'completed',
+    summary: {
+      access: {
+        count: 0,
+        latency_ns: { count: 0, mean: 0, min: 0, max: 0, p50: 0, p95: 0, p99: 0 },
+        local_hit_ratio: 0,
+        remote_hit_ratio: 0,
+        miss_ratio: 0,
+        stall_ns: 0
+      }
+    },
+    manifest: {},
+    error: null
+  }
+
+  const run = adaptRunSummaryToSimulationRun(summary, detail, [])
+
+  assert.equal(run.metrics.latency_ns.p50, null)
+  assert.equal(run.metrics.latency_ns.p95, null)
+  assert.equal(run.metrics.latency_ns.p99, null)
+  assert.equal(run.metrics.latency_ns.mean, null)
+  assert.equal(run.metrics.latency_ns.max, null)
+  assert.equal(run.metrics.stall_time_ns, null)
+  // Counters stay truthful zeros: nothing ran, nothing moved, nothing served.
+  assert.equal(run.metrics.local_hit_ratio, 0)
+  assert.equal(run.metrics.remote_hit_ratio, 0)
+})

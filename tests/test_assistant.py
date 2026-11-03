@@ -82,6 +82,71 @@ class AssistantContract(unittest.TestCase):
         self.assertIn("scenario", body)
         self.assertGreater(len(body["errors"]), 0)
 
+    def test_draft_repairs_once_on_validation_errors(self):
+        bad = tiny_synth()
+        bad["metrics"] = {"p99_access_latency_ns": 1}
+        script = [json.dumps(bad), json.dumps(tiny_synth())]
+        seen = []
+
+        class Scripted:
+            model = "fake"
+
+            def __init__(self, *a, **k):
+                pass
+
+            def chat(self, messages, **kw):
+                seen.append(messages)
+                return {"content": script.pop(0), "usage": {},
+                        "model": "fake"}
+
+        with mock.patch.object(appmod, "BasetenClient", Scripted):
+            r = self.c.post("/scenarios/draft", json={"prompt": "x"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(len(seen), 2)
+        # The repair turn carries the validation errors back to the model.
+        self.assertIn("unknown field", json.dumps(seen[1]))
+
+    def test_draft_system_names_allowed_metrics_fields(self):
+        from rmemfab.api.draft import SYSTEM
+        self.assertIn("percentiles", SYSTEM)
+        self.assertIn("sample_interval_ns", SYSTEM)
+
+    def test_draft_escalates_tokens_on_empty_content(self):
+        calls = []
+
+        class Escalating:
+            model = "fake"
+
+            def __init__(self, *a, **k):
+                pass
+
+            def chat(self, messages, **kw):
+                calls.append(kw.get("max_tokens"))
+                if len(calls) == 1:
+                    raise ProviderError(
+                        "empty content (reasoning consumed the budget; "
+                        "retry with more max_tokens)")
+                return {"content": json.dumps(tiny_synth()), "usage": {},
+                        "model": "fake"}
+
+        with mock.patch.object(appmod, "BasetenClient", Escalating):
+            r = self.c.post("/scenarios/draft", json={"prompt": "x"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1], calls[0] * 2)
+
+    def test_draft_other_provider_error_is_502(self):
+        class Failing:
+            def __init__(self, *a, **k):
+                pass
+
+            def chat(self, messages, **kw):
+                raise ProviderError("baseten HTTP 500: overloaded")
+
+        with mock.patch.object(appmod, "BasetenClient", Failing):
+            r = self.c.post("/scenarios/draft", json={"prompt": "x"})
+        self.assertEqual(r.status_code, 502)
+
     def test_draft_without_key_is_503(self):
         class NoKey:
             def __init__(self, *a, **k):
@@ -276,6 +341,44 @@ class AssistantContract(unittest.TestCase):
         self.assertIn("Run scenario JSON", system)
         # policy.name exists only in the scenario, never in telemetry.
         self.assertIn('"name": "swap_remote"', system)
+        # The suffix names the real patchable paths so the model stops
+        # guessing telemetry field names.
+        self.assertIn("/policy/name", system)
+
+    def test_chat_retries_empty_completion_once(self):
+        calls = {"n": 0}
+
+        class Flaky:
+            model = "fake"
+
+            def __init__(self, *a, **k):
+                pass
+
+            def chat_stream(self, messages, **kw):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    yield {"choices": [{"delta": {}}]}
+                else:
+                    yield {"choices": [{"delta": {"content": "recovered"}}]}
+
+        with mock.patch.object(appmod, "BasetenClient", Flaky):
+            r = self.c.post("/assistant/chat", json={"messages": []})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["content"], "recovered")
+        self.assertEqual(calls["n"], 2)
+
+    def test_chat_persistent_empty_returns_502_not_blank(self):
+        FakeClient.chunks = [{"choices": [{"delta": {}}]}]
+        r = self.c.post("/assistant/chat", json={"messages": []})
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("no content", r.text)
+
+    def test_chat_empty_reports_finish_reason(self):
+        FakeClient.chunks = [
+            {"choices": [{"delta": {}, "finish_reason": "length"}]}]
+        r = self.c.post("/assistant/chat", json={"messages": []})
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("length", r.text)
 
     def test_chat_suggest_patch_needs_run_and_no_stream(self):
         r = self.c.post("/assistant/chat", json={

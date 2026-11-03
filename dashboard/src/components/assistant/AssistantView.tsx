@@ -9,6 +9,21 @@ import { Badge } from '../common/Badge'
 import { parseChatMessage } from '../../utils/chatFormat'
 import type { Span } from '../../utils/chatFormat'
 
+const STARTER_PROMPTS: Array<{ label: string; prompt: string }> = [
+  {
+    label: 'Summarize this run',
+    prompt: 'Summarize this run with exact numbers: p50/p95/p99 read latency, local vs remote hit split, and migration bytes.'
+  },
+  {
+    label: 'Explain tail latency',
+    prompt: 'What drives tail latency on this run? Cite exact telemetry numbers.'
+  },
+  {
+    label: 'Propose a patch',
+    prompt: "Propose one policy change to test next on this exact scenario, and emit it as a patch block against this run's scenario."
+  }
+]
+
 interface AssistantViewProps {
   runs: SimulationRun[]
   onNotify: (message: string, type: 'success' | 'error' | 'info') => void
@@ -196,8 +211,8 @@ export const AssistantView: React.FC<AssistantViewProps> = ({ runs, onNotify, on
 
   const sendable = input.trim().length > 0 && !isSending && (!suggestPatch || activeRunId !== '')
 
-  const handleSend = async () => {
-    const text = input.trim()
+  const handleSend = async (textOverride?: string) => {
+    const text = (textOverride ?? input).trim()
     if (!text || isSending) return
     if (suggestPatch && !activeRunId) {
       setChatError('Pick a run first: suggestions are validated against a run scenario')
@@ -396,6 +411,28 @@ export const AssistantView: React.FC<AssistantViewProps> = ({ runs, onNotify, on
                 {chatError}
               </div>
             )}
+
+            {thread.length === 0 && !isSending && (
+              <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                Ask about the selected run — every number comes from its telemetry bundle, never
+                invented. With <strong>Request validated patch</strong> on, proposals arrive as
+                validated patches you can Apply (runs + compares) or ignore.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              {STARTER_PROMPTS.map((s) => (
+                <button
+                  key={s.label}
+                  className="btn btn-sm btn-outline"
+                  onClick={() => void handleSend(s.prompt)}
+                  disabled={isSending || (suggestPatch && !activeRunId)}
+                  title={s.prompt}
+                >
+                  <span>{s.label}</span>
+                </button>
+              ))}
+            </div>
 
             <div className="form-grid-2">
               <div className="form-group">

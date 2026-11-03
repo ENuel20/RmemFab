@@ -109,7 +109,7 @@ export function evaluateComparisonEligibility(selectedRuns: SimulationRun[]): Co
     if (typeof run.is_demo === 'boolean') return run.is_demo
     return (
       run.id.startsWith('demo-') ||
-      run.id.startsWith('run-llama-cxl-') ||
+      run.id.startsWith('run-muse-glimmer-cxl-') ||
       run.id.startsWith('run-moe-rdma-') ||
       run.id.startsWith('run-sparse-') ||
       run.policy_display_name.startsWith('[Demo]')
@@ -121,7 +121,7 @@ export function evaluateComparisonEligibility(selectedRuns: SimulationRun[]): Co
     return (
       typeof run.is_demo === 'boolean' ||
       run.id.startsWith('demo-') ||
-      run.id.startsWith('run-llama-cxl-') ||
+      run.id.startsWith('run-muse-glimmer-cxl-') ||
       run.id.startsWith('run-moe-rdma-') ||
       run.id.startsWith('run-sparse-') ||
       run.policy_display_name.startsWith('[Demo]')

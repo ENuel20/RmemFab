@@ -159,7 +159,10 @@ The co-pilot is an optional layer on top of the deterministic core:
 - **Policy proposals:** suggests parameter or policy changes, then reruns the simulation with the same seed and reports the measured delta.
 - **Grounded answers:** the co-pilot reasons over simulator telemetry, not invented numbers. Proposed runs are explicit and reproducible.
 
-The co-pilot is model-agnostic. The planned hackathon build uses Meta open-weight models through partner inference endpoints, with workload profiling on serverless GPUs. None of these integrations are required for the core simulator, which runs fully offline and deterministically.
+The co-pilot runs on **Meta's Muse Spark** (`meta-models/muse-spark-open-1026`)
+served through **Baseten inference** — see [Built on Meta Muse](#built-on-meta-muse--baseten-inference-partner)
+below. None of these integrations are required for the core simulator,
+which runs fully offline and deterministically.
 
 ## Technology stack (planned)
 
@@ -249,6 +252,71 @@ Useful next steps:
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for milestones and
 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) for acceptance criteria.
+
+## Test it with natural language (3 copy-paste prompts)
+
+Assistant features need a Baseten key: put `BASETEN_API_KEY=…` in `.env`
+(gitignored) and restart the API. Everything below runs against live runs —
+no mocks.
+
+**1. Draft an experiment from English** — Scenario Builder →
+*Describe Your Experiment*:
+
+> 1 node with 64 GB local DRAM and a 256 GB shared remote pool over a
+> high-speed RDMA interconnect, running KV-cache decode; compare
+> local_only, hot_cold and predictive_prefetch; show how network
+> contention affects p99 access latency
+
+The model returns schema-validated JSON (invalid drafts are repaired
+once, then returned with field-level errors — never silently fixed).
+Review the Assumed list, edit, submit, and it runs like any scenario.
+
+**2. Ask what happened** — open any run, Assistant tab:
+
+> What drives tail latency on this run? Cite exact telemetry numbers.
+
+Answers quote run telemetry with units and say plainly when the data
+does not support an answer. False premises are refused: asking about a
+policy the run did not use gets a correction, not a hallucinated
+comparison.
+
+**3. Ask what to test next** — same tab, *Request validated patch* on:
+
+> Propose one policy change to test next on this exact scenario, and
+> emit it as a patch block against this run's scenario.
+
+You get a recommendation plus a validated JSON patch (Apply & run
+executes it as a new versioned run). The server revalidates every op
+before anything runs.
+
+## Built on Meta Muse + Baseten inference (partner)
+
+RmemFab's AI layer is built on Meta open-weight models served by
+inference partner Baseten:
+
+- **Model:** `meta-models/muse-spark-open-1026` (Muse Spark), called
+  for NL scenario drafting (`POST /scenarios/draft`), grounded run
+  Q&A, and validated patch proposals (`POST /assistant/chat`).
+- **Provider:** Baseten inference API (`inference.baseten.co`),
+  OpenAI-compatible chat + SSE streaming. Client:
+  `src/rmemfab/api/providers.py`; the server refuses to load any
+  non-Muse model.
+- **Grounding contract:** the model sees run telemetry + the run's
+  scenario JSON and must quote exact numbers; patch paths verify
+  against the scenario (telemetry field names are rejected); every
+  suggestion revalidates server-side and nothing runs until the user
+  applies it. Provenance labels (measured / derived / synthetic /
+  assumed) travel from capture to dashboard so AI text can never
+  launder a guess into a fact.
+- **Reliability hardening (all test-covered):** stream token budget
+  sized for reasoning models, retry-on-empty with finish-reason
+  diagnostics, one validation-repair turn for drafts, token
+  auto-escalation for long prompts. See `docs/03-test-drive.md`
+  Detours 4–7.
+
+Every measured number in [docs/05-test-runs.md](docs/05-test-runs.md)
+reproduces offline without any key; the AI assists around the
+simulator, never inside it.
 
 ## Tutorial: your first 15 minutes
 

@@ -84,7 +84,7 @@ class BasetenClient:
                 "usage": data.get("usage", {}),
                 "model": data.get("model", self.model)}
 
-    def chat_stream(self, messages, *, max_tokens=2000, temperature=0.2):
+    def chat_stream(self, messages, *, max_tokens=8000, temperature=0.2):
         """Yield raw SSE data payloads (dicts); raises ProviderError."""
         payload = {"model": self.model, "messages": messages,
                    "max_tokens": max_tokens, "temperature": temperature,

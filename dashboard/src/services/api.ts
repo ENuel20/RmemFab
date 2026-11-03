@@ -23,7 +23,7 @@ import type {
   VersionDetail
 } from '../types/telemetry'
 import { adaptRunSummaryToSimulationRun } from '../types/telemetry'
-import { MOCK_SIMULATION_RUNS, LLAMA_70B_CXL_SCENARIO } from './mockData'
+import { MOCK_SIMULATION_RUNS, MUSE_GLIMMER_CXL_SCENARIO } from './mockData'
 import { validateScenario } from '../utils/validation'
 import { routeRunStreamFrame } from '../utils/runStream'
 import {
@@ -50,36 +50,8 @@ function maxLinkUtil(links: unknown): number | null {
 }
 
 /** HTTP failure with the parsed body attached (422s carry errors[]). */
-export class ApiError extends Error {
-  status: number
-  detail: unknown
-  constructor(status: number, message: string, detail?: unknown) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-    this.detail = detail
-  }
-}
-
-export function apiErrorMessage(err: unknown): string {
-  if (err instanceof ApiError && err.detail && typeof err.detail === 'object') {
-    const d = err.detail as Record<string, unknown>
-    const inner = (d.detail ?? d.Detail ?? d) as Record<string, unknown> | unknown
-    if (typeof inner === 'string') return inner
-    if (inner && typeof inner === 'object') {
-      const rec = inner as Record<string, unknown>
-      if (typeof rec.error === 'string') return rec.error
-      if (typeof rec.reason === 'string') return rec.reason
-      if (Array.isArray(rec.errors)) {
-        return (rec.errors as Array<{ path?: string; message?: string }>)
-          .map((e) => `${e.path || 'error'}: ${e.message || JSON.stringify(e)}`)
-          .join('; ')
-      }
-    }
-    return err.message
-  }
-  return err instanceof Error ? err.message : String(err)
-}
+import { ApiError } from './apiErrors'
+export { ApiError, apiErrorMessage } from './apiErrors'
 
 export type { ValidateResponse } from '../types/telemetry'
 
@@ -105,7 +77,18 @@ class RmemFabApiClient {
 
   constructor() {
     const savedUrl = localStorage.getItem('rmemfab_api_url')
-    if (savedUrl) this.baseUrl = savedUrl
+    if (savedUrl) {
+      this.baseUrl = savedUrl
+    } else if (
+      typeof window !== 'undefined' &&
+      window.location.port !== '5173' &&
+      (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+    ) {
+      // Single-URL mode (local :8000 or a deployment): the page is served
+      // by its own backend, so talk to our origin. Vite dev (:5173) and
+      // file:// keep the localhost:8000 default. A saved override wins.
+      this.baseUrl = window.location.origin
+    }
     const savedMode = localStorage.getItem('rmemfab_use_mock')
     if (savedMode !== null) this.useMock = savedMode === 'true'
   }
@@ -560,7 +543,7 @@ class RmemFabApiClient {
   }
 
   public getDefaultScenario(): ScenarioConfig {
-    return JSON.parse(JSON.stringify(LLAMA_70B_CXL_SCENARIO))
+    return JSON.parse(JSON.stringify(MUSE_GLIMMER_CXL_SCENARIO))
   }
 
   /**
