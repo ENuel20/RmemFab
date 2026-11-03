@@ -15,6 +15,7 @@ import { KpiCard } from '../common/KpiCard'
 import { Badge } from '../common/Badge'
 import type { SimulationRun } from '../../types/telemetry'
 import { formatNanoseconds, formatPercent } from '../../utils/formatters'
+import { latencyWindowsCollapsed } from '../../utils/latencyCollapse'
 import {
   AreaChart,
   Area,
@@ -73,8 +74,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   // Live list rows are thin strips (no scenario snapshot or series). Enrich
   // the primary run with its detail exactly once so the tier chart and
-  // occupancy series render from measured data. Per-window latency stays
-  // honestly absent: the engine does not record it.
+  // series render from measured data. New-engine bundles carry recorded
+  // per-window latency; older ones show the fallback.
   const [enriched, setEnriched] = useState<{ id: string; run: SimulationRun } | null>(null)
   useEffect(() => {
     if (isMockMode || !primaryRunId) return
@@ -85,6 +86,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     return () => { cancelled = true }
   }, [isMockMode, primaryRunId])
   const displayRun = !isMockMode && enriched && enriched.id === primaryRunId ? enriched.run : primaryRun
+  const latencyCollapsed = latencyWindowsCollapsed(displayRun?.time_series ?? [])
 
   // Memory tier distribution data derived from authentic scenario snapshot
   const tierDistributionData = displayRun?.scenario_snapshot?.nodes
@@ -231,6 +233,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div className="chart-container-inner">
             {activeChartMetric === 'latency' ? (
               displayRun?.time_series?.some((p) => p.p50_latency_ns != null || p.p99_latency_ns != null) ? (
+                <>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={displayRun?.time_series || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
@@ -255,6 +258,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     <Area type="monotone" dataKey="p50_latency_ns" name="p50 Latency (Median)" stroke="#06b6d4" fillOpacity={1} fill="url(#p50Grad)" />
                   </AreaChart>
                 </ResponsiveContainer>
+                {latencyCollapsed && (
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', paddingTop: '6px', textAlign: 'center' }}>
+                    p50, p95 and p99 coincide in every recorded window — deterministic zero-jitter reads render as one line. See the run summary for the distribution.
+                  </div>
+                )}
+                </>
               ) : (
                 <div style={{ height: '100%', minHeight: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card-secondary)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)', padding: '24px', textAlign: 'center' }}>
                   <span style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '420px', lineHeight: 1.5 }}>

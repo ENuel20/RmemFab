@@ -189,3 +189,19 @@ before its test passes.
   apply to old bundles only.
 - Pitch line: "The gap the log called honestly absent is now honestly
   filled — recorded windows, gaps where idle, old runs untouched."
+
+## Merge — serving into main (user-ordered all-on-main)
+- Branch `exp/serving-model` merged as `121dc08` + sha-stability fix
+  `e169036` (serving section gated on compute config; memory-only
+  summaries byte-identical). Triaged on merged tip: backend 208/208,
+  dashboard 61/61, tsc/eslint clean. Test 1 summary sha
+  `5b6ce4d94d1714c7` re-confirmed stable.
+- Refreshed 7 synthetic demo bundles with the merged engine (same
+  run_ids, byte-identical summaries, recorded windows now present).
+  Replay runs intentionally untouched (replay engine records no
+  windows — honest fallback remains). Serving runs
+  `16b2b1fa46bd`/`f36daf2ebfcb` seeded by branch lane (dirs renamed
+  to match inner run_ids after a reseed left stale names); full
+  serving section (ttft/tpot/itl/compute) verified via API.
+- Pitch line: "One main, one dashboard — memory science and serving
+  telemetry side by side, every old number intact."

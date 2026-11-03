@@ -5,6 +5,7 @@ import { Badge } from '../common/Badge'
 import { KpiCard } from '../common/KpiCard'
 import { Gauge } from 'lucide-react'
 import { formatNanoseconds } from '../../utils/formatters'
+import { servingEmptyMessage } from '../../utils/servingEmpty'
 import {
   Area,
   AreaChart,
@@ -198,9 +199,7 @@ export const ServingView: React.FC<ServingViewProps> = ({ runs, isMockMode }) =>
             No Serving Telemetry on This Run
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto' }}>
-            {isMockMode
-              ? 'Demo runs predate the serving model and carry no TTFT/TPOT record. Switch to Live mode and open a run produced by the compute-aware engine.'
-              : 'This run was produced before the serving section existed. Re-run its scenario with the compute-aware engine to record TTFT, pacing, and compute service time.'}
+            {servingEmptyMessage(isMockMode, displayRun?.scenario_snapshot)}
           </p>
         </div>
       )}
