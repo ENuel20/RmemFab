@@ -33,3 +33,6 @@ out/
 .idea/
 *.swp
 .DS_Store
+
+# Experiment worktrees (never committed)
+/.worktrees/

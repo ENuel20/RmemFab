@@ -202,3 +202,42 @@ test('6. Memory occupancy bytes are derived when page size is known, or remain n
   assert.equal(runWithoutPageSize.time_series[0].local_occupancy_bytes, null)
   assert.equal(runWithoutPageSize.time_series[0].remote_occupancy_bytes, null)
 })
+
+test('7. Per-window fabric bandwidth is derived from recorded link bytes over measured window duration', () => {
+  const summary = createMinimalSummary('live-run-107')
+  const detail: RunDetail = {
+    run_id: 'live-run-107',
+    status: 'completed',
+    summary: {},
+    manifest: {},
+    error: null
+  }
+  const rawSeries: SeriesPoint[] = [
+    {
+      t_ns: 0,
+      accesses: 10,
+      evictions: 0,
+      completed: 10,
+      local_used_pages: { 'node-0': 5 },
+      pool_used_pages: 15,
+      link_bytes: { 'l0': 0 }
+    },
+    {
+      t_ns: 1000000,
+      accesses: 25,
+      evictions: 1,
+      completed: 24,
+      local_used_pages: { 'node-0': 8 },
+      pool_used_pages: 20,
+      link_bytes: { 'l0': 3000, 'l1': 1000 }
+    }
+  ]
+
+  const run = adaptRunSummaryToSimulationRun(summary, detail, rawSeries)
+
+  assert.equal(run.time_series.length, 2)
+  // First point has no prior timestamp: no rate exists, never defaulted
+  assert.equal(run.time_series[0].fabric_bandwidth_bytes_per_ns, undefined)
+  // (3000 + 1000) bytes / 1000000 ns = 0.004 bytes/ns
+  assert.equal(run.time_series[1].fabric_bandwidth_bytes_per_ns, 0.004)
+})

@@ -4,7 +4,7 @@
   "name": "phase2-replay-baseten",
   "description": "Replay of the Baseten Muse batch-sweep trace (derived request-level capture; see the trace manifest for provenance).",
   "assumptions": [
-    "Replay executes the OPT block-table trace in native 576 KiB units.",
+    "Replay executes the Baseten Muse batch-sweep trace (derived request-level capture) in native 2 MiB units; page ops derived under stated geometry, not block-table-measured.",
     "Local 2 GiB (1024 pages) against a 1687-page live peak forces pool spill; pool 64 GiB absorbs it."
   ],
   "seed": 7,

@@ -20,10 +20,7 @@ export function App() {
   const [currentView, setCurrentView] = useState<NavView>('overview')
   const [runs, setRuns] = useState<SimulationRun[]>([])
   const [activeRunDetail, setActiveRunDetail] = useState<SimulationRun | null>(null)
-  const [selectedComparisonIds, setSelectedComparisonIds] = useState<string[]>([
-    'run-llama-cxl-swap',
-    'run-llama-cxl-hotcold'
-  ])
+  const [selectedComparisonIds, setSelectedComparisonIds] = useState<string[]>([])
   const [activeScenarioName, setActiveScenarioName] = useState<string>('llama-70b-cxl')
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [isMockMode, setIsMockMode] = useState<boolean>(() => apiClient.isMockMode())
@@ -75,10 +72,15 @@ export function App() {
     setCurrentView('comparison')
   }
 
-  // Reset to default benchmark pair
+  // Reset to default benchmark pair (first two completed runs, whatever they are)
   const handleSelectBenchmarkPair = () => {
-    setSelectedComparisonIds(['run-llama-cxl-swap', 'run-llama-cxl-hotcold'])
-    notify('Selected baseline pair: Swap-to-Remote vs. Hot/Cold Migration', 'info')
+    const completed = runs.filter((r) => r.status === 'completed').slice(0, 2)
+    if (completed.length < 2) {
+      notify('Need at least two completed runs for a comparison', 'error')
+      return
+    }
+    setSelectedComparisonIds(completed.map((r) => r.id))
+    notify(`Selected pair: ${completed.map((r) => r.policy_display_name || r.policy_name).join(' vs ')}`, 'info')
   }
 
   // Handle new scenario click
@@ -175,6 +177,7 @@ export function App() {
         {currentView === 'overview' && (
           <OverviewView
             runs={runs}
+            isMockMode={isMockMode}
             onOpenRunDetails={(run) => setActiveRunDetail(run)}
             onNavigateToBuilder={() => setCurrentView('builder')}
             onNavigateToComparison={handleNavigateToComparison}

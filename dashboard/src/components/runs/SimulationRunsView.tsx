@@ -523,7 +523,7 @@ const WhatIfModal: React.FC<{
 }
 
 export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
-  run,
+  run: propRun,
   onSelectForComparison,
   isSelectedForComparison,
   onNotify,
@@ -531,6 +531,22 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
 }) => {
   const [showStream, setShowStream] = useState(false)
   const [showWhatIf, setShowWhatIf] = useState(false)
+  // Live list rows are thin strips (no scenario snapshot or series). Enrich
+  // on open so occupancy charts, tier data, and the what-if link list render
+  // from measured data. Mock rows are already complete.
+  const runId = propRun.id
+  const needsEnrich = propRun.time_series.length === 0 || !propRun.scenario_snapshot
+  const [enriched, setEnriched] = useState<SimulationRun | null>(null)
+  useEffect(() => {
+    if (apiClient.isMockMode() || !needsEnrich) return
+    let cancelled = false
+    void apiClient.getRun(runId)
+      .then((r) => { if (!cancelled && r) setEnriched(r) })
+      .catch(() => { if (!cancelled) setEnriched(null) })
+    return () => { cancelled = true }
+  }, [runId, needsEnrich])
+  const run = enriched && enriched.id === runId ? enriched : propRun
+  const isEnriching = !apiClient.isMockMode() && needsEnrich && !(enriched && enriched.id === runId)
   const degraded = run.degraded
   const hasFaults = !!degraded && (degraded.windows.length > 0 || degraded.loss_events > 0 || degraded.stalled_requests > 0)
   return (
@@ -554,6 +570,11 @@ export const RunDetailInspector: React.FC<RunDetailInspectorProps> = ({
           {run.scenario_hash ? `Hash: ${run.scenario_hash.slice(0, 12)}` : '—'}
         </span>
       </div>
+      {isEnriching && (
+        <span style={{ fontSize: '12px', color: 'var(--accent-cyan)' }}>
+          Loading full telemetry (scenario + series) from live backend…
+        </span>
+      )}
 
       {/* Failure alert if run failed */}
       {run.status === 'failed' && (

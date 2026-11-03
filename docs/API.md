@@ -85,6 +85,8 @@ Strip shape (all nullable-in-failure fields included):
  "status": "completed", "error": null,
  "arrived": 3, "completed": 3, "rejected": 0,
  "p50": 445.66, "p95": 445.66,
+ "local_hit_ratio": 0.0175, "remote_hit_ratio": 0.9825,
+ "fabric_utilization": 0.4569,
  "remote_read_bytes": 258342912, "migration_bytes": 66322432,
  "created_at": "2026-11-01T13:55:00+00:00"}
 ```

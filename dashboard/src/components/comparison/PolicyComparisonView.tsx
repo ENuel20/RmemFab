@@ -95,7 +95,33 @@ export const PolicyComparisonView: React.FC<PolicyComparisonViewProps> = ({
       ignore = true
     }
   }, [selectedRunIds, isMockMode])
-  const selectedRuns = runs.filter((r) => selectedRunIds.includes(r.id))
+
+  // Live list rows are thin strips without scenario snapshots, which the
+  // client-side guard needs. Enrich selected runs on demand (mock rows are
+  // already complete). The server verdict stays authoritative in live mode.
+  const [enrichedById, setEnrichedById] = useState<Record<string, SimulationRun>>({})
+  const thinKey = runs
+    .filter((r) => selectedRunIds.includes(r.id) && !r.scenario_snapshot?.workload)
+    .map((r) => r.id)
+    .join(',')
+  useEffect(() => {
+    if (isMockMode || thinKey === '') return
+    const ids = thinKey.split(',')
+    let cancelled = false
+    void Promise.all(ids.map((id) => apiClient.getRun(id).catch(() => undefined)))
+      .then((results) => {
+        if (cancelled) return
+        setEnrichedById((prev) => {
+          const next = { ...prev }
+          for (const r of results) if (r) next[r.id] = r
+          return next
+        })
+      })
+    return () => { cancelled = true }
+  }, [isMockMode, thinKey])
+  const selectedRuns = runs
+    .filter((r) => selectedRunIds.includes(r.id))
+    .map((r) => enrichedById[r.id] ?? r)
 
   // Client-side guard (authoritative for Demo Mode, informational fallback)
   const guardResult = evaluateComparisonEligibility(selectedRuns)

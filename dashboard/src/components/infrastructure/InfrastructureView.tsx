@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import type { SimulationRun } from '../../types/telemetry'
+import { apiClient } from '../../services/api'
 import {
   Network,
   Database,
@@ -36,7 +37,24 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
   const [hoveredLink, setHoveredLink] = useState<string | null>(null)
 
   const currentRun = runs.find((r) => r.id === selectedRunId) || runs[0]
-  const scenario = currentRun?.scenario_snapshot
+  // Live list rows are thin strips without the saved scenario. Enrich the
+  // selected run on demand so the topology renders from measured data.
+  const currentRunId = currentRun?.id ?? null
+  const needsEnrich = !!currentRun && !currentRun.scenario_snapshot
+  const [enriched, setEnriched] = useState<{ id: string; run: SimulationRun } | null>(null)
+  const [failedId, setFailedId] = useState<string | null>(null)
+  useEffect(() => {
+    if (isMockMode || !currentRunId || !needsEnrich) return
+    let cancelled = false
+    void apiClient.getRun(currentRunId)
+      .then((r) => {
+        if (cancelled) return
+        if (r) setEnriched({ id: currentRunId, run: r })
+        else setFailedId(currentRunId)
+      })
+      .catch(() => { if (!cancelled) setFailedId(currentRunId) })
+    return () => { cancelled = true }
+  }, [isMockMode, currentRunId, needsEnrich])
 
   // Empty state: no runs available
   if (!currentRun || runs.length === 0) {
@@ -63,7 +81,11 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
     )
   }
 
-  const topology = deriveTopologySummary(scenario, currentRun?.metrics)
+  const displayRun = !isMockMode && enriched && enriched.id === currentRunId ? enriched.run : currentRun
+  const scenario = displayRun?.scenario_snapshot
+  const loadFailed = failedId === currentRunId
+  const isLoadingScenario = !isMockMode && !scenario && !loadFailed
+  const topology = deriveTopologySummary(scenario, displayRun?.metrics)
   const computeNodes = topology.computeNodes
   const memoryPoolNodes = topology.memoryPoolNodes
   const links = topology.links
@@ -113,8 +135,23 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
         </div>
       </div>
 
-      {/* Scenario Unavailable Warning */}
-      {!scenario && (
+      {/* Scenario loading / unavailable states */}
+      {isLoadingScenario && (
+        <div
+          className="card"
+          style={{
+            textAlign: 'center',
+            padding: '36px 24px',
+            backgroundColor: 'var(--bg-card-secondary)',
+            borderStyle: 'dashed'
+          }}
+        >
+          <span style={{ fontSize: '13px', color: 'var(--accent-cyan)' }}>
+            Loading saved scenario definition from live backend…
+          </span>
+        </div>
+      )}
+      {!scenario && !isLoadingScenario && (
         <div
           className="card"
           style={{
@@ -129,7 +166,7 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
             Scenario Hardware Definition Unavailable for {currentRun.id}
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto' }}>
-            The simulation engine manifest did not bundle an authentic scenario configuration for this run. Hardware topology cannot be fabricated.
+            No scenario configuration is attached to this run. Hardware topology cannot be fabricated.
           </p>
         </div>
       )}
@@ -160,8 +197,8 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
               <span>Seed: <strong style={{ color: 'var(--text-primary)' }}>{scenario.seed ?? currentRun.seed ?? '—'}</strong></span>
               <span>Page Size: <strong style={{ color: 'var(--text-primary)' }}>{scenario.page_size_bytes ? formatBytes(scenario.page_size_bytes) : '—'}</strong></span>
               <span>
-                Fabric Util: <strong style={{ color: currentRun.metrics.fabric_utilization != null ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
-                  {currentRun.metrics.fabric_utilization != null ? formatPercent(currentRun.metrics.fabric_utilization) : 'Unavailable'}
+                Fabric Util: <strong style={{ color: displayRun.metrics.fabric_utilization != null ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                  {displayRun.metrics.fabric_utilization != null ? formatPercent(displayRun.metrics.fabric_utilization) : 'Unavailable'}
                 </strong>
               </span>
             </div>
@@ -218,8 +255,8 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
                     </div>
                     <div>
                       <span style={{ color: 'var(--text-muted)' }}>Local Hit Ratio: </span>
-                      <strong style={{ color: currentRun.metrics.local_hit_ratio != null ? 'var(--accent-teal)' : 'var(--text-muted)' }}>
-                        {currentRun.metrics.local_hit_ratio != null ? formatPercent(currentRun.metrics.local_hit_ratio) : 'Unavailable'}
+                      <strong style={{ color: displayRun.metrics.local_hit_ratio != null ? 'var(--accent-teal)' : 'var(--text-muted)' }}>
+                        {displayRun.metrics.local_hit_ratio != null ? formatPercent(displayRun.metrics.local_hit_ratio) : 'Unavailable'}
                       </strong>
                     </div>
                   </div>

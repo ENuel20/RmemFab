@@ -195,6 +195,21 @@ class ApiContract(unittest.TestCase):
         failed = self.c.get("/runs", params={"status": "failed"}).json()
         self.assertTrue(all(r["status"] == "failed" for r in failed))
 
+    def test_runs_list_strip_carries_kpi_fields(self):
+        rid = self._submit(tiny_synth(policy="swap_remote"))["run_id"]
+        rows = self.c.get("/runs").json()
+        row = next(r for r in rows if r["run_id"] == rid)
+        detail = self.c.get(f"/runs/{rid}").json()["summary"]
+        for key in ("local_hit_ratio", "remote_hit_ratio",
+                    "fabric_utilization"):
+            self.assertIn(key, row)
+        self.assertEqual(row["local_hit_ratio"],
+                         detail["access"]["local_hit_ratio"])
+        self.assertEqual(row["remote_hit_ratio"],
+                         detail["access"]["remote_hit_ratio"])
+        utils = [v["utilization"] for v in detail["links"].values()]
+        self.assertEqual(row["fabric_utilization"], max(utils))
+
     def test_series_decimation(self):
         rid = self._submit(tiny_synth())["run_id"]
         full = self.c.get(f"/runs/{rid}/series").json()
