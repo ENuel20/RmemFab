@@ -1083,18 +1083,6 @@ class Engine:
                          "throughput_per_s": self.completed_ss / (steady / 1e9),
                          "tokens_per_s": self.tokens_ss / (steady / 1e9)},
             "decode_step_latency_ns": ss.step_hist.stats(pct),
-            "serving": {"ttft_ns": self.ttft_hist.stats(pct),
-                        "ttft_all_ns": self.ttft_hist_all.stats(pct),
-                        "tpot_ns": ss.step_hist.mean(),
-                        "itl_ns": ss.step_hist.stats(pct),
-                        "compute_ns": self.compute_ns_prefill + self.compute_ns_decode,
-                        "compute_prefill_ns": self.compute_ns_prefill,
-                        "compute_decode_ns": self.compute_ns_decode,
-                        "compute_note": ("Serialized bound: prefill compute "
-                                         "(prompt_tokens/tokens_per_second) and decode compute "
-                                         "(1/tokens_per_second per token) are added after memory "
-                                         "service with no overlap; 0 when "
-                                         "compute.tokens_per_second is unset.")},
             "access": {"count": c["reads"], "latency_ns": ss.read_hist.stats(pct),
                        "latency_all_ns": self.m_all.read_hist.stats(pct),
                        "local_hits": c["read_local"], "remote_hits": c["read_remote"],
@@ -1138,6 +1126,19 @@ class Engine:
         }
         if sc.geometry_source == "legacy_dense":
             s["workload"]["kv_formula"] = "2 * layers * kv_heads * head_dim * dtype_bytes"
+        if any(n.compute_tokens_per_second for n in sc.nodes):
+            s["serving"] = {
+                "ttft_ns": self.ttft_hist.stats(pct),
+                "ttft_all_ns": self.ttft_hist_all.stats(pct),
+                "tpot_ns": ss.step_hist.mean(),
+                "itl_ns": ss.step_hist.stats(pct),
+                "compute_ns": self.compute_ns_prefill + self.compute_ns_decode,
+                "compute_prefill_ns": self.compute_ns_prefill,
+                "compute_decode_ns": self.compute_ns_decode,
+                "compute_note": ("Serialized bound: prefill compute "
+                                 "(prompt_tokens/tokens_per_second) and decode compute "
+                                 "(1/tokens_per_second per token) are added after memory "
+                                 "service with no overlap.")}
         return roundf(s)
 
     def _remote_bytes(self, direction):

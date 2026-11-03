@@ -57,15 +57,11 @@ def read_events(out):
 
 
 class TestServingModel(unittest.TestCase):
-    def test_absent_compute_is_memory_only(self):
+    def test_absent_compute_omits_serving_section(self):
+        # No compute configured: no serving key at all, so pre-serving
+        # summaries stay byte-identical (Test 1 sha stability).
         summary, _ = run(base_mutator, event_log=False)
-        serving = summary["serving"]
-        self.assertEqual(serving["compute_ns"], 0.0)
-        self.assertEqual(serving["compute_prefill_ns"], 0.0)
-        self.assertEqual(serving["compute_decode_ns"], 0.0)
-        # Boundaries still defined without compute: one TTFT per completed req.
-        self.assertEqual(serving["ttft_ns"]["count"],
-                         summary["requests"]["completed"])
+        self.assertNotIn("serving", summary)
 
     def test_compute_independent_of_memory_config(self):
         def slow(raw):
