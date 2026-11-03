@@ -37,6 +37,17 @@ import {
   validateVersionDetail
 } from './contractValidators'
 
+/** Max link utilization across a summary links map; null when unmeasured. */
+function maxLinkUtil(links: unknown): number | null {
+  if (!links || typeof links !== 'object') return null
+  let best: number | null = null
+  for (const v of Object.values(links as Record<string, unknown>)) {
+    const u = (v as Record<string, unknown> | null)?.utilization
+    if (typeof u === 'number' && !Number.isNaN(u)) best = best === null ? u : Math.max(best, u)
+  }
+  return best
+}
+
 /** HTTP failure with the parsed body attached (422s carry errors[]). */
 export class ApiError extends Error {
   status: number
@@ -331,6 +342,9 @@ class RmemFabApiClient {
         rejected: (sum.requests as Record<string, number>)?.rejected ?? null,
         p50: ((sum.access as Record<string, unknown>)?.latency_ns as Record<string, number>)?.p50 ?? null,
         p95: ((sum.access as Record<string, unknown>)?.latency_ns as Record<string, number>)?.p95 ?? null,
+        local_hit_ratio: (sum.access as Record<string, number>)?.local_hit_ratio ?? null,
+        remote_hit_ratio: (sum.access as Record<string, number>)?.remote_hit_ratio ?? null,
+        fabric_utilization: maxLinkUtil(sum.links),
         remote_read_bytes: (sum.traffic as Record<string, number>)?.remote_read_bytes ?? null,
         migration_bytes: (sum.traffic as Record<string, number>)?.migration_bytes ?? null,
         created_at: typeof sum.created_at === 'string' ? sum.created_at : null,

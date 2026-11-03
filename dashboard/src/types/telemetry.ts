@@ -78,6 +78,9 @@ export interface RunSummary {
   rejected: number | null
   p50: number | null
   p95: number | null
+  local_hit_ratio: number | null
+  remote_hit_ratio: number | null
+  fabric_utilization: number | null
   remote_read_bytes: number | null
   migration_bytes: number | null
   created_at: string | null
@@ -363,9 +366,13 @@ export function adaptRunSummaryToSimulationRun(
   const mean = typeof lat?.mean === 'number' ? lat.mean : null
   const max = typeof lat?.max === 'number' ? lat.max : null
 
-  // 2. Access counters & ratios: null if not measured
-  const localHitRatio = typeof sum?.access?.local_hit_ratio === 'number' ? sum.access.local_hit_ratio : null
-  const remoteHitRatio = typeof sum?.access?.remote_hit_ratio === 'number' ? sum.access.remote_hit_ratio : null
+  // 2. Access counters & ratios: detail first, list-strip fallback, null if not measured
+  const localHitRatio = typeof sum?.access?.local_hit_ratio === 'number'
+    ? sum.access.local_hit_ratio
+    : (typeof summary.local_hit_ratio === 'number' ? summary.local_hit_ratio : null)
+  const remoteHitRatio = typeof sum?.access?.remote_hit_ratio === 'number'
+    ? sum.access.remote_hit_ratio
+    : (typeof summary.remote_hit_ratio === 'number' ? summary.remote_hit_ratio : null)
   const missRatio = typeof sum?.access?.miss_ratio === 'number' ? sum.access.miss_ratio : null
   const stallTimeNs = typeof sum?.access?.stall_ns === 'number' ? sum.access.stall_ns : null
   const totalAccesses = typeof sum?.access?.count === 'number' ? sum.access.count : null
@@ -379,7 +386,8 @@ export function adaptRunSummaryToSimulationRun(
     : (typeof summary.migration_bytes === 'number' ? summary.migration_bytes : null)
   const prefetchAccuracy = typeof sum?.traffic?.prefetch_accuracy === 'number' ? sum.traffic.prefetch_accuracy : null
 
-  // 4. Fabric utilization and queue depth: derived mathematically from link stats when present, otherwise null
+  // 4. Fabric utilization and queue depth: derived mathematically from link stats when present,
+  // list-strip fallback for utilization, otherwise null
   let maxUtil: number | null = null
   let peakQueue: number | null = null
   if (sum?.links && typeof sum.links === 'object') {
@@ -395,11 +403,16 @@ export function adaptRunSummaryToSimulationRun(
       })
     }
   }
+  if (maxUtil === null && typeof summary.fabric_utilization === 'number') {
+    maxUtil = summary.fabric_utilization
+  }
 
   // 5. Time series mapping (Lossless preservation of backend SeriesPoint fields)
   // Per-window latency, queue depth, and utilization are NOT fabricated from summary values.
+  // Fabric bandwidth IS derived: recorded per-link per-window bytes divided by the
+  // measured window duration is rate arithmetic on recorded data, not invention.
   const pageSize = sum?.workload?.page_size_bytes || man?.page_size_bytes
-  const timeSeries: TimeSeriesPoint[] = (series || []).map((sp) => {
+  const timeSeries: TimeSeriesPoint[] = (series || []).map((sp, idx, arr) => {
     let localOccupancy: number | null = null
     if (pageSize && sp.local_used_pages && typeof sp.local_used_pages === 'object') {
       const totalPages = Object.values(sp.local_used_pages).reduce((a, b) => a + (Number(b) || 0), 0)
@@ -408,6 +421,13 @@ export function adaptRunSummaryToSimulationRun(
     let remoteOccupancy: number | null = null
     if (pageSize && typeof sp.pool_used_pages === 'number') {
       remoteOccupancy = sp.pool_used_pages * pageSize
+    }
+    let bandwidth: number | undefined
+    if (idx > 0 && sp.link_bytes && typeof sp.link_bytes === 'object') {
+      const dt = sp.t_ns - arr[idx - 1].t_ns
+      if (dt > 0) {
+        bandwidth = Object.values(sp.link_bytes).reduce((a, b) => a + (Number(b) || 0), 0) / dt
+      }
     }
 
     return {
@@ -422,7 +442,8 @@ export function adaptRunSummaryToSimulationRun(
       link_bytes: sp.link_bytes,
       degraded: typeof sp.degraded === 'number' ? sp.degraded : 0,
       local_occupancy_bytes: localOccupancy,
-      remote_occupancy_bytes: remoteOccupancy
+      remote_occupancy_bytes: remoteOccupancy,
+      fabric_bandwidth_bytes_per_ns: bandwidth
       // Per-window latency and summary utilization are intentionally omitted
     }
   })

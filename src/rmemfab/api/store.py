@@ -64,9 +64,14 @@ class RunStore:
         s = self._read_json(d / SUMMARY) or {}
         m = self._read_json(d / MANIFEST) or {}
         sc = self._read_json(d / SCENARIO) or {}
-        lat = (s.get("access") or {}).get("latency_ns") or {}
+        acc = s.get("access") or {}
+        lat = acc.get("latency_ns") or {}
         req = s.get("requests") or {}
         traf = s.get("traffic") or {}
+        links = s.get("links") or {}
+        utils = [v.get("utilization") for v in links.values()
+                 if isinstance(v, dict)
+                 and isinstance(v.get("utilization"), (int, float))]
         pol = s.get("policy") or m.get("policy") or {}
         try:
             created = datetime.fromtimestamp(
@@ -87,6 +92,9 @@ class RunStore:
             "arrived": req.get("arrived"), "completed": req.get("completed"),
             "rejected": req.get("rejected"),
             "p50": lat.get("p50"), "p95": lat.get("p95"),
+            "local_hit_ratio": acc.get("local_hit_ratio"),
+            "remote_hit_ratio": acc.get("remote_hit_ratio"),
+            "fabric_utilization": max(utils) if utils else None,
             "remote_read_bytes": traf.get("remote_read_bytes"),
             "migration_bytes": traf.get("migration_bytes"),
             "created_at": created,

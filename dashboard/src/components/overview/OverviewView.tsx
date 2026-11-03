@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { apiClient } from '../../services/api'
 import {
   Activity,
   Zap,
@@ -29,6 +30,7 @@ import {
 
 interface OverviewViewProps {
   runs: SimulationRun[]
+  isMockMode: boolean
   onOpenRunDetails: (run: SimulationRun) => void
   onNavigateToBuilder: () => void
   onNavigateToComparison: (initialRunIds?: string[]) => void
@@ -36,6 +38,7 @@ interface OverviewViewProps {
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
   runs,
+  isMockMode,
   onOpenRunDetails,
   onNavigateToBuilder,
   onNavigateToComparison
@@ -64,12 +67,28 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     ? ((validUtils.reduce((s, v) => s + v, 0) / validUtils.length) * 100).toFixed(1)
     : '—'
 
-  // Benchmark run for time-series display
-  const primaryRun = runs.find((r) => r.id === 'run-llama-cxl-hotcold') || runs[0]
+  // Benchmark run for time-series display: first completed run, whatever it is
+  const primaryRun = runs.find((r) => r.status === 'completed') || runs[0]
+  const primaryRunId = primaryRun?.id ?? null
+
+  // Live list rows are thin strips (no scenario snapshot or series). Enrich
+  // the primary run with its detail exactly once so the tier chart and
+  // occupancy series render from measured data. Per-window latency stays
+  // honestly absent: the engine does not record it.
+  const [enriched, setEnriched] = useState<{ id: string; run: SimulationRun } | null>(null)
+  useEffect(() => {
+    if (isMockMode || !primaryRunId) return
+    let cancelled = false
+    void apiClient.getRun(primaryRunId)
+      .then((r) => { if (!cancelled && r) setEnriched({ id: primaryRunId, run: r }) })
+      .catch(() => { if (!cancelled) setEnriched(null) })
+    return () => { cancelled = true }
+  }, [isMockMode, primaryRunId])
+  const displayRun = !isMockMode && enriched && enriched.id === primaryRunId ? enriched.run : primaryRun
 
   // Memory tier distribution data derived from authentic scenario snapshot
-  const tierDistributionData = primaryRun?.scenario_snapshot?.nodes
-    ? primaryRun.scenario_snapshot.nodes.map((n) => ({
+  const tierDistributionData = displayRun?.scenario_snapshot?.nodes
+    ? displayRun.scenario_snapshot.nodes.map((n) => ({
         name: n.id,
         localDramGb: n.local_memory?.capacity_bytes
           ? parseFloat((n.local_memory.capacity_bytes / (1024 ** 3)).toFixed(1))
@@ -98,7 +117,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div style={{ maxWidth: '820px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
               <Badge variant="cyan" icon={<Sparkles size={12} />}>DISCRETE-EVENT MEMORY EXPLORATION</Badge>
-              <Badge variant="amber">DEMO DATASET ACTIVE</Badge>
+              {isMockMode ? (
+                <Badge variant="amber">DEMO DATASET ACTIVE</Badge>
+              ) : (
+                <Badge variant="emerald">LIVE BACKEND DATA</Badge>
+              )}
             </div>
             <h2 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.3px', margin: '4px 0 8px 0' }}>
               Welcome to RmemFab Simulation Studio
@@ -113,10 +136,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               className="btn btn-outline"
-              onClick={() => onNavigateToComparison(['run-llama-cxl-swap', 'run-llama-cxl-hotcold'])}
+              onClick={() => onNavigateToComparison(completedRuns.slice(0, 2).map((r) => r.id))}
+              disabled={completedRuns.length < 2}
+              title={completedRuns.length < 2 ? 'Need at least two completed runs to compare' : 'Compare the first two completed runs'}
               style={{ fontSize: '12px', padding: '9px 14px' }}
             >
-              <span>Compare Swap vs Hot/Cold</span>
+              <span>Compare Runs</span>
               <ArrowRight size={14} />
             </button>
             <button
@@ -177,7 +202,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <Activity size={16} color="var(--accent-cyan)" />
                 <span>Virtual-Time Telemetry Dynamics</span>
                 <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>
-                  ({primaryRun?.scenario_name || primaryRun?.id || 'No run'} • seed {primaryRun?.seed ?? '—'})
+                  ({displayRun?.scenario_name || displayRun?.id || 'No run'} • seed {displayRun?.seed ?? '—'})
                 </span>
               </div>
               <div className="card-subtitle">
@@ -205,9 +230,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
           <div className="chart-container-inner">
             {activeChartMetric === 'latency' ? (
-              primaryRun?.time_series?.some((p) => p.p50_latency_ns != null || p.p99_latency_ns != null) ? (
+              displayRun?.time_series?.some((p) => p.p50_latency_ns != null || p.p99_latency_ns != null) ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={primaryRun?.time_series || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <AreaChart data={displayRun?.time_series || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="p99Grad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
@@ -238,9 +263,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </div>
               )
             ) : (
-              primaryRun?.time_series?.some((p) => p.fabric_bandwidth_bytes_per_ns != null) ? (
+              displayRun?.time_series?.some((p) => p.fabric_bandwidth_bytes_per_ns != null) ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={primaryRun?.time_series || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <AreaChart data={displayRun?.time_series || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="bwGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.5} />
@@ -281,7 +306,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               </div>
             </div>
             <Badge variant="teal">
-              {primaryRun?.scenario_snapshot?.name || 'Selected Topology'}
+              {displayRun?.scenario_snapshot?.name || 'Selected Topology'}
             </Badge>
           </div>
 
