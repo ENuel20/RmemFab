@@ -251,7 +251,9 @@ export const ServingView: React.FC<ServingViewProps> = ({ runs, isMockMode }) =>
                 />
               ) : (
                 <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                  Time split unavailable: this run lacks request-latency totals or compute accounting.
+                  {serving.request_latency_count === 0
+                    ? 'No requests completed in this run — the time split needs completed-request latencies.'
+                    : 'Time split unavailable: this run lacks request-latency totals or compute accounting.'}
                 </span>
               )}
             </div>

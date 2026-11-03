@@ -9,10 +9,11 @@
     "The workload is synthetic KV-cache decode derived from Llama-3-70B geometry, not a captured trace.",
     "The compute tokens_per_second field is omitted, matching examples/llama-70b-cxl.json. Request duration is therefore driven by modeled memory accesses, not accelerator throughput.",
     "EXP-BRANCH: compute service is serialized after memory service with no overlap (pessimistic bound).",
-    "EXP-BRANCH: TTFT = arrival to first decode-step end; TPOT/ITL from recorded decode-step durations."
+    "EXP-BRANCH: TTFT = arrival to first decode-step end; TPOT/ITL from recorded decode-step durations.",
+    "EXP-BRANCH: sized (gen 16, arrival 1/s, 30s) so most requests complete; decode is remote-stall-heavy by fixture design."
   ],
   "seed": 7,
-  "duration_ns": 10000000000,
+  "duration_ns": 30000000000,
   "warmup_ns": 1000000000,
   "page_size_bytes": 2097152,
   "nodes": [
@@ -33,11 +34,11 @@
       },
       "compute": {
         "accelerators": 1,
-        "tokens_per_second": 20000,
+        "tokens_per_second": 5000,
         "provenance": {
           "kind": "assumed",
           "source": "experiment default, not a measurement",
-          "method": "Round 50us/token figure chosen to make the compute/memory split visible; calibrate before any claim."
+          "method": "Round 200us/token figure sized so the compute/memory split is visible and most requests complete; illustrative, calibrate before any claim."
         }
       }
     },
@@ -92,10 +93,10 @@
       "dtype_bytes": 2
     },
     "requests": {
-      "arrival_rate_per_second": 2,
+      "arrival_rate_per_second": 1.0,
       "concurrency": 4,
       "prompt_tokens": 8192,
-      "generated_tokens": 128,
+      "generated_tokens": 16,
       "phase_mix": {
         "prefill": 0.2,
         "decode": 0.8
