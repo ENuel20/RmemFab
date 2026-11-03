@@ -8,6 +8,7 @@ import { PolicyComparisonView } from './components/comparison/PolicyComparisonVi
 import { InfrastructureView } from './components/infrastructure/InfrastructureView'
 import { TracesView } from './components/traces/TracesView'
 import { AssistantView } from './components/assistant/AssistantView'
+import { ServingView } from './components/serving/ServingView'
 import { SettingsView } from './components/settings/SettingsView'
 import { Modal } from './components/common/Modal'
 import { ToastContainer, type ToastMessage } from './components/common/Toast'
@@ -233,6 +234,13 @@ export function App() {
             runs={runs}
             onNotify={notify}
             onRefreshRuns={() => void refreshRuns()}
+            isMockMode={isMockMode}
+          />
+        )}
+
+        {currentView === 'serving' && (
+          <ServingView
+            runs={runs}
             isMockMode={isMockMode}
           />
         )}

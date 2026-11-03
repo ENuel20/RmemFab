@@ -245,7 +245,50 @@ test('7. Per-window fabric bandwidth is derived from recorded link bytes over me
   assert.equal(run.time_series[1].fabric_bandwidth_bytes_per_ns, 0.004)
 })
 
-test('8. List-strip tail latency (p99/mean/max) populates percentiles without detail fetch', () => {
+test('8. Serving telemetry maps TTFT/TPOT/ITL/compute from detail, null when the run predates it', () => {
+  const summary = createMinimalSummary('live-run-107')
+  const detail: RunDetail = {
+    run_id: 'live-run-107',
+    status: 'completed',
+    summary: {
+      serving: {
+        ttft_ns: { p50: 1000, p95: 2000, p99: 3000, mean: 1500, count: 4 },
+        tpot_ns: 250,
+        itl_ns: { p50: 200, p95: 400, p99: 500 },
+        compute_ns: 8000,
+        compute_prefill_ns: 6000,
+        compute_decode_ns: 2000
+      },
+      requests: { latency_ns: { mean: 5000, count: 4 } }
+    },
+    manifest: {},
+    error: null
+  }
+
+  const run = adaptRunSummaryToSimulationRun(summary, detail, [])
+  assert.equal(run.serving?.ttft_p50, 1000)
+  assert.equal(run.serving?.ttft_p99, 3000)
+  assert.equal(run.serving?.ttft_mean, 1500)
+  assert.equal(run.serving?.ttft_count, 4)
+  assert.equal(run.serving?.tpot_ns, 250)
+  assert.equal(run.serving?.itl_p99, 500)
+  assert.equal(run.serving?.compute_ns, 8000)
+  assert.equal(run.serving?.compute_prefill_ns, 6000)
+  assert.equal(run.serving?.compute_decode_ns, 2000)
+  assert.equal(run.serving?.request_latency_mean, 5000)
+  assert.equal(run.serving?.request_latency_count, 4)
+
+  // Runs produced before the serving section existed stay null, never zero-filled.
+  const legacy = adaptRunSummaryToSimulationRun(summary, { ...DetailWithoutServing(detail) }, [])
+  assert.equal(legacy.serving, null)
+})
+
+function DetailWithoutServing(detail: RunDetail): RunDetail {
+  const summary = { ...(detail.summary as Record<string, unknown>) }
+  delete summary.serving
+  return { ...detail, summary }
+}
+test('9. List-strip tail latency (p99/mean/max) populates percentiles without detail fetch', () => {
   const summary = createMinimalSummary('live-run-108', {
     p50: 120, p95: 350, p99: 980, mean: 140, max: 1500
   })
@@ -259,7 +302,7 @@ test('8. List-strip tail latency (p99/mean/max) populates percentiles without de
   assert.equal(run.metrics.latency_ns.max, 1500)
 })
 
-test('9. Recorded per-window latency maps to series points; empty windows stay undefined', () => {
+test('10. Recorded per-window latency maps to series points; empty windows stay undefined', () => {
   const summary = createMinimalSummary('live-run-109')
   const detail: RunDetail = {
     run_id: 'live-run-109',
