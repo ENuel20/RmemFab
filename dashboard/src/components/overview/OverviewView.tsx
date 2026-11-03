@@ -167,6 +167,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           unit="runs"
           trend={{ value: `${runs.length} runs tracked`, isPositive: true }}
           icon={<Layers size={16} />}
+          demoBadge={isMockMode}
         />
         <KpiCard
           title="Median Access Latency"
@@ -175,6 +176,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           unit={medianP50 !== '—' ? 'ns' : ''}
           trend={{ value: medianP50 !== '—' ? 'Measured median' : 'Awaiting data', isPositive: true }}
           icon={<TrendingDown size={16} />}
+          demoBadge={isMockMode}
         />
         <KpiCard
           title="Remote Memory Hit Ratio"
@@ -183,6 +185,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           unit={avgHitRatio !== '—' ? '%' : ''}
           trend={{ value: avgHitRatio !== '—' ? 'Across valid runs' : 'Awaiting data', isPositive: true }}
           icon={<Zap size={16} />}
+          demoBadge={isMockMode}
         />
         <KpiCard
           title="Fabric Utilization"
@@ -191,6 +194,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           unit={avgUtil !== '—' ? '%' : ''}
           trend={{ value: avgUtil !== '—' ? 'Across valid runs' : 'Awaiting data', isPositive: true }}
           icon={<Activity size={16} />}
+          demoBadge={isMockMode}
         />
       </div>
 

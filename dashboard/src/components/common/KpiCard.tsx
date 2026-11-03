@@ -20,7 +20,9 @@ export const KpiCard: React.FC<KpiCardProps> = ({
   unit,
   trend,
   icon,
-  demoBadge = true
+  // Default off: callers opt IN to the DEMO stamp with their mode flag.
+  // Default-on once labeled live data as demo across the Overview.
+  demoBadge = false
 }) => {
   return (
     <div className="kpi-card">
