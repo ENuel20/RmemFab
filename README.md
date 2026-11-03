@@ -250,6 +250,74 @@ Useful next steps:
 See [docs/ROADMAP.md](docs/ROADMAP.md) for milestones and
 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) for acceptance criteria.
 
+## Tutorial: your first 15 minutes
+
+Start the server (`make dev`) and open `http://127.0.0.1:8000`.
+The badge must read **Live** — Demo mode shows mock data and never
+touches the engine.
+
+**1. Run two policies (2 min).** In a terminal:
+
+```bash
+rmemfab run examples/phase2-replay-opt.json --policy swap_remote --out /tmp/pol/swap --quiet
+rmemfab run examples/phase2-replay-opt.json --policy hot_cold --out /tmp/pol/hc --quiet
+```
+
+This replays a measured 4,540-op LLM trace twice — same seed, same
+hardware, only the policy differs.
+
+**2. Compare them fairly (2 min).**
+
+```bash
+rmemfab compare /tmp/pol/swap /tmp/pol/hc
+```
+
+You get a side-by-side table (p50/p95/p99, hit ratios, bytes moved).
+Now break it on purpose: `rmemfab compare /tmp/pol/swap
+/tmp/rmemfab-quickstart` → `refused: scenarios differ at …`.
+RmemFab refuses uncontrolled comparisons instead of lying; the
+dashboard Policy Comparison view enforces the same guard.
+
+**3. See it in the dashboard (3 min).**
+
+- **Runs** → Inspect any run: KPIs, latency chart, occupancy,
+  degraded panel, and **Stream events** (virtual-time replay).
+- **Policy Comparison** → select two runs → fair verdict or refusal.
+- **Serving** → open a `phase7-compute-serving` run for TTFT/TPOT/ITL.
+- **Scenario Builder** → edit, validate, and submit new scenarios;
+  submitted runs appear in Runs automatically.
+
+**4. Replay traces honestly (2 min).**
+
+```bash
+rmemfab trace-validate examples/traces/20261029T202303Z-opt-125m/kv_trace.jsonl
+rmemfab trace-validate examples/traces/20261030T000445Z-muse-glimmer-derived/kv_trace.jsonl
+```
+
+The first passes (measured capture); the second is refused with row
+numbers — invalid traces are rejected, never silently repaired.
+The Trace Library view uploads and profiles traces the same way.
+
+**5. Let the assistant help (3 min, needs a Baseten key in `.env`).**
+Open **Assistant**, pick a run, ask for exact numbers ("quote p50/p95/p99
+with units"), then ask for a policy change as a patch block. The
+server validates the patch, you click Apply, it runs and compares.
+Patches against fields that don't exist are rejected with the reason.
+
+**6. Prove it reproduces (3 min).** Re-run anything twice — bundles
+are byte-identical for the same scenario + seed. Then `make test`:
+backend (210) and dashboard (77) suites must stay green.
+
+**Troubleshooting.**
+
+- Port busy / wrong data: two servers running (check `:8000` vs `:5173`
+  vs experiment ports); the dashboard header shows its backend URL,
+  changeable in Settings.
+- Stale dashboard at `:8000`: `make dashboard-dist` rebuilds the
+  static bundle (`make dev` warns when sources are newer).
+- Assistant 503/422: missing `.env` key, or streaming + patch
+  requested together (uncheck Stream when requesting a patch).
+
 ## Roadmap
 
 - **Phase 0 — Specification:** scenario, event, and trace schemas; simulation and policy contracts. *(in this repo)*
