@@ -24,6 +24,12 @@ rmemfab serve                    # http://127.0.0.1:8000
 rmemfab serve --port 8123 --open # custom port + open /docs
 ```
 
+Single-URL mode: when `dashboard/dist/index.html` exists (build it with
+`make dashboard-dist`), the server also serves the dashboard at `/`
+(API routes take precedence; the app has no client-side routes). With
+no build, use the vite dev server (`cd dashboard && npm run dev`,
+`:5173`) — or pass `--static-dir ''` to disable the mount.
+
 No auth on localhost. CORS allows all origins (dashboard dev servers work).
 Runs persist under `./runs/<run_id>/`; trace uploads under
 `./traces/uploads/`. Flags `--runs-dir` / `--traces-dir` override both.

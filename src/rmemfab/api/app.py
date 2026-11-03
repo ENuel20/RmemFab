@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import copy
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .. import __version__
@@ -146,7 +148,8 @@ def _apply_patch(scenario: dict, ops: list[PatchOp]):
 
 
 def create_app(runs_dir="runs", traces_dir="traces/uploads",
-               trace_max_bytes=128 * 1024 * 1024) -> FastAPI:
+               trace_max_bytes=128 * 1024 * 1024,
+               static_dir="dashboard/dist") -> FastAPI:
     runs = RunStore(runs_dir)
     traces = TraceStore(traces_dir, max_bytes=trace_max_bytes)
     versions_dir = runs.runs / "versions"
@@ -619,5 +622,13 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
         if res["status"] == "failed":
             body["error"] = res.get("error")
         return body
+
+    # Single-URL mode: serve a built dashboard when present. The mount is
+    # registered last so API routes (including /docs) take precedence.
+    # (No SPA fallback: the dashboard has no client-side routes and
+    # lives at /.) Absent without a build: use vite dev on :5173.
+    if static_dir and (Path(static_dir) / "index.html").is_file():
+        app.mount("/", StaticFiles(directory=static_dir, html=True),
+                  name="dashboard")
 
     return app

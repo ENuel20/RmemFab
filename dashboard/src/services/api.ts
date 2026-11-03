@@ -25,6 +25,7 @@ import type {
 import { adaptRunSummaryToSimulationRun } from '../types/telemetry'
 import { MOCK_SIMULATION_RUNS, LLAMA_70B_CXL_SCENARIO } from './mockData'
 import { validateScenario } from '../utils/validation'
+import { routeRunStreamFrame } from '../utils/runStream'
 import {
   validateRunSummaryList,
   validateRunDetail,
@@ -948,31 +949,38 @@ class RmemFabApiClient {
 
   /**
    * Live virtual-time event stream: GET /runs/{id}/stream (SSE).
-   * Returns a closer. onEvent receives parsed event objects.
+   * Returns a closer. onEvent receives parsed event objects; onDone fires
+   * on the server's clean `done` frame (never reported as an error).
    */
   public openRunStream(
     runId: string, onEvent: (event: Record<string, unknown>) => void,
-    onError?: (err: Error) => void
+    onError?: (err: Error) => void,
+    onDone?: () => void
   ): () => void {
     if (this.useMock) {
       onError?.(new Error('Run streaming needs a live backend (Settings → Live mode)'))
       return () => undefined
     }
     const source = new EventSource(`${this.baseUrl}/runs/${encodeURIComponent(runId)}/stream`)
-    source.onmessage = (msg) => {
-      if (msg.data === '[DONE]') {
+    // The server emits named frames only; a bare onmessage would never fire.
+    let finished = false
+    const sink = {
+      onEvent,
+      onDone: () => {
+        finished = true
         source.close()
-        return
-      }
-      try {
-        onEvent(JSON.parse(msg.data) as Record<string, unknown>)
-      } catch {
-        // Ignore malformed SSE lines.
+        onDone?.()
       }
     }
+    for (const type of ['tick', 'event', 'done']) {
+      source.addEventListener(type, (msg) => {
+        routeRunStreamFrame(type, (msg as MessageEvent).data, sink)
+      })
+    }
     source.onerror = () => {
+      // A finished stream closing is clean; anything else is a real error.
       source.close()
-      onError?.(new Error('Stream connection closed'))
+      if (!finished) onError?.(new Error('Stream connection closed'))
     }
     return () => source.close()
   }

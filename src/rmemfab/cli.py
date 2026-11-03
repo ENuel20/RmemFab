@@ -143,9 +143,16 @@ def _cmd_serve(a) -> int:
               "(pip install 'rmemfab[api]')", file=sys.stderr)
         return 1
     from .api import create_app
-    app = create_app(runs_dir=a.runs_dir, traces_dir=a.traces_dir)
+    app = create_app(runs_dir=a.runs_dir, traces_dir=a.traces_dir,
+                     static_dir=a.static_dir)
     print(f"serving RmemFab API on http://{a.host}:{a.port} "
           f"(runs={a.runs_dir} traces={a.traces_dir})")
+    if a.static_dir and (Path(a.static_dir) / "index.html").is_file():
+        print(f"serving RmemFab dashboard on http://{a.host}:{a.port}/ "
+              f"(build at {a.static_dir})")
+    else:
+        print("dashboard build not found: run `make dashboard-dist` or use "
+              "the vite dev server (cd dashboard && npm run dev)")
     if a.open:
         import webbrowser
         webbrowser.open(f"http://{a.host}:{a.port}/docs")
@@ -208,6 +215,8 @@ def main(argv=None) -> int:
     s.add_argument("--port", type=int, default=8000)
     s.add_argument("--runs-dir", default="runs")
     s.add_argument("--traces-dir", default="traces/uploads")
+    s.add_argument("--static-dir", default="dashboard/dist",
+                   help="built dashboard to serve at / (empty disables)")
     s.add_argument("--open", action="store_true",
                    help="open the API docs in a browser")
     s.set_defaults(fn=_cmd_serve)

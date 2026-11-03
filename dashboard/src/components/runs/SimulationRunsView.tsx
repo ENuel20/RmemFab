@@ -349,15 +349,12 @@ const StreamModal: React.FC<{ runId: string; onClose: () => void }> = ({ runId, 
       runId,
       (ev) => setEvents((prev) => [...prev.slice(-199), ev]),
       (err) => {
-        // A clean replay ends with [DONE] (close without error text surfaced).
-        if (err.message !== 'Stream connection closed' || events.length === 0) {
-          setStreamError(err.message)
-        }
+        setStreamError(err.message)
         setIsDone(true)
-      }
+      },
+      () => setIsDone(true)
     )
     return close
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId])
 
   useEffect(() => {

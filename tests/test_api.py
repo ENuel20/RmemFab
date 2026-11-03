@@ -311,6 +311,30 @@ class ApiContract(unittest.TestCase):
         self.assertEqual(d.status_code, 200)
         self.assertEqual(self.c.get(f"/traces/{tid}").status_code, 404)
 
+    def test_dashboard_static_served_when_present(self):
+        static = Path(self.td.name) / "dist"
+        static.mkdir()
+        (static / "index.html").write_text("<html>dash</html>",
+                                           encoding="utf-8")
+        (static / "app.js").write_text("console.log(1)", encoding="utf-8")
+        app = create_app(runs_dir=str(Path(self.td.name) / "runs2"),
+                         traces_dir=str(Path(self.td.name) / "traces2"),
+                         static_dir=str(static))
+        c = TestClient(app)
+        r = c.get("/")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("dash", r.text)
+        self.assertEqual(c.get("/app.js").status_code, 200)
+        # API routes take precedence over the static mount.
+        self.assertEqual(c.get("/runs").status_code, 200)
+        self.assertEqual(c.get("/health").status_code, 200)
+        # No client-side routing: unknown paths 404 (the app lives at /).
+        self.assertEqual(c.get("/comparison").status_code, 404)
+
+    def test_dashboard_static_absent_leaves_api_alone(self):
+        self.assertEqual(self.c.get("/comparison").status_code, 404)
+        self.assertEqual(self.c.get("/runs").status_code, 200)
+
     def test_trace_upload_rejects_invalid(self):
         blob = ("\n".join([json.dumps(HEADER),
                            json.dumps(op(10, "read", "ghost"))]) + "\n").encode()
