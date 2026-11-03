@@ -78,6 +78,9 @@ export interface RunSummary {
   rejected: number | null
   p50: number | null
   p95: number | null
+  p99: number | null
+  mean: number | null
+  max: number | null
   local_hit_ratio: number | null
   remote_hit_ratio: number | null
   fabric_utilization: number | null
@@ -96,6 +99,17 @@ export interface RunDetail {
   error: string | null
 }
 
+export interface WindowLatency {
+  count: number
+  mean?: number
+  min?: number
+  max?: number
+  p50?: number
+  p90?: number
+  p95?: number
+  p99?: number
+}
+
 export interface SeriesPoint {
   t_ns: number
   accesses: number
@@ -106,6 +120,7 @@ export interface SeriesPoint {
   pool_used_pages: number
   pools_used_pages?: Record<string, number>
   link_bytes: Record<string, number>
+  latency_ns?: WindowLatency
 }
 
 export interface SimEvent {
@@ -342,9 +357,9 @@ export function adaptRunSummaryToSimulationRun(
   const p50 = typeof lat?.p50 === 'number' ? lat.p50 : (typeof summary.p50 === 'number' ? summary.p50 : null)
   const p90 = typeof lat?.p90 === 'number' ? lat.p90 : null
   const p95 = typeof lat?.p95 === 'number' ? lat.p95 : (typeof summary.p95 === 'number' ? summary.p95 : null)
-  const p99 = typeof lat?.p99 === 'number' ? lat.p99 : null
-  const mean = typeof lat?.mean === 'number' ? lat.mean : null
-  const max = typeof lat?.max === 'number' ? lat.max : null
+  const p99 = typeof lat?.p99 === 'number' ? lat.p99 : (typeof summary.p99 === 'number' ? summary.p99 : null)
+  const mean = typeof lat?.mean === 'number' ? lat.mean : (typeof summary.mean === 'number' ? summary.mean : null)
+  const max = typeof lat?.max === 'number' ? lat.max : (typeof summary.max === 'number' ? summary.max : null)
 
   // 2. Access counters & ratios: detail first, list-strip fallback, null if not measured
   const localHitRatio = typeof sum?.access?.local_hit_ratio === 'number'
@@ -409,6 +424,12 @@ export function adaptRunSummaryToSimulationRun(
         bandwidth = Object.values(sp.link_bytes).reduce((a, b) => a + (Number(b) || 0), 0) / dt
       }
     }
+    // Recorded per-window latency only: count 0 (warmup/idle window) or a
+    // missing block maps to undefined, never to a fabricated zero line.
+    const win = sp.latency_ns && typeof sp.latency_ns === 'object' && sp.latency_ns.count > 0
+      ? sp.latency_ns
+      : null
+    const num = (v: unknown): number | undefined => (typeof v === 'number' ? v : undefined)
 
     return {
       time_ns: sp.t_ns,
@@ -423,8 +444,11 @@ export function adaptRunSummaryToSimulationRun(
       degraded: typeof sp.degraded === 'number' ? sp.degraded : 0,
       local_occupancy_bytes: localOccupancy,
       remote_occupancy_bytes: remoteOccupancy,
-      fabric_bandwidth_bytes_per_ns: bandwidth
-      // Per-window latency and summary utilization are intentionally omitted
+      fabric_bandwidth_bytes_per_ns: bandwidth,
+      p50_latency_ns: win ? num(win.p50) : undefined,
+      p95_latency_ns: win ? num(win.p95) : undefined,
+      p99_latency_ns: win ? num(win.p99) : undefined
+      // Summary utilization is intentionally not repeated in series points
     }
   })
 

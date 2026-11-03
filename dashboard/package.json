@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test src/utils/comparisonGuard.test.ts src/types/telemetry.test.ts src/utils/comparisonMetrics.test.ts src/services/contractValidators.test.ts src/utils/validation.test.ts src/components/infrastructure/topologyHelpers.test.ts",
+    "test": "node --experimental-strip-types --test src/utils/comparisonGuard.test.ts src/types/telemetry.test.ts src/utils/comparisonMetrics.test.ts src/services/contractValidators.test.ts src/utils/validation.test.ts src/components/infrastructure/topologyHelpers.test.ts src/utils/chatFormat.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

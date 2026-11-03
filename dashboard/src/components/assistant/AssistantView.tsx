@@ -6,6 +6,8 @@ import type {
   SimulationRun, SuggestedPatch
 } from '../../types/telemetry'
 import { Badge } from '../common/Badge'
+import { parseChatMessage } from '../../utils/chatFormat'
+import type { Span } from '../../utils/chatFormat'
 
 interface AssistantViewProps {
   runs: SimulationRun[]
@@ -89,6 +91,65 @@ function SuggestionCard({
         <Play size={13} />
         <span>{isApplying ? 'Applying & running…' : 'Apply & run'}</span>
       </button>
+    </div>
+  )
+}
+
+function ChatSpans({ spans }: { spans: Span[] }) {
+  return (
+    <>
+      {spans.map((s, i) =>
+        s.t === 'bold' ? (
+          <strong key={i}>{s.s}</strong>
+        ) : s.t === 'code' ? (
+          <code
+            key={i}
+            className="mono"
+            style={{ padding: '0 4px', borderRadius: '4px', backgroundColor: 'rgba(148, 163, 184, 0.12)', fontSize: '12px' }}
+          >
+            {s.s}
+          </code>
+        ) : (
+          <span key={i}>{s.s}</span>
+        )
+      )}
+    </>
+  )
+}
+
+function ChatMessageBody({ content }: { content: string }) {
+  const blocks = parseChatMessage(content)
+  return (
+    <div style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      {blocks.map((b, bi) => {
+        if (b.t === 'code') {
+          return (
+            <pre
+              key={bi}
+              className="mono"
+              style={{ margin: 0, padding: '8px 10px', borderRadius: '6px', backgroundColor: 'rgba(148, 163, 184, 0.08)', border: '1px solid var(--border-card)', overflowX: 'auto', fontSize: '12px' }}
+            >
+              {b.text}
+            </pre>
+          )
+        }
+        if (b.t === 'list') {
+          return (
+            <ul key={bi} style={{ margin: 0, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {b.items.map((it, ii) => (
+                <li key={ii} style={{ marginLeft: `${it.level * 16}px` }}>
+                  <ChatSpans spans={it.spans} />
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        return (
+          <div key={bi}>
+            <ChatSpans spans={b.spans} />
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -309,9 +370,13 @@ export const AssistantView: React.FC<AssistantViewProps> = ({ runs, onNotify, on
                   <div style={{ fontSize: '11px', fontWeight: 700, color: m.role === 'user' ? 'var(--accent-cyan)' : 'var(--accent-emerald)', marginBottom: '4px' }}>
                     {m.role === 'user' ? 'YOU' : `ASSISTANT${m.model ? ` · ${m.model}` : ''}`}
                   </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
-                    {m.content || (isSending && i === thread.length - 1 ? '…' : '')}
-                  </div>
+                  {m.content ? (
+                    <ChatMessageBody content={m.content} />
+                  ) : (
+                    <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                      {isSending && i === thread.length - 1 ? '…' : ''}
+                    </div>
+                  )}
                   {m.suggestion && activeRunId && (
                     <SuggestionCard
                       suggestion={m.suggestion}

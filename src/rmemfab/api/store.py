@@ -92,6 +92,8 @@ class RunStore:
             "arrived": req.get("arrived"), "completed": req.get("completed"),
             "rejected": req.get("rejected"),
             "p50": lat.get("p50"), "p95": lat.get("p95"),
+            "p99": lat.get("p99"), "mean": lat.get("mean"),
+            "max": lat.get("max"),
             "local_hit_ratio": acc.get("local_hit_ratio"),
             "remote_hit_ratio": acc.get("remote_hit_ratio"),
             "fabric_utilization": max(utils) if utils else None,

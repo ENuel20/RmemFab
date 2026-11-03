@@ -84,7 +84,7 @@ Strip shape (all nullable-in-failure fields included):
             "fallback_reason": null},
  "status": "completed", "error": null,
  "arrived": 3, "completed": 3, "rejected": 0,
- "p50": 445.66, "p95": 445.66,
+ "p50": 445.66, "p95": 445.66, "p99": 892.10, "mean": 441.20, "max": 1500.0,
  "local_hit_ratio": 0.0175, "remote_hit_ratio": 0.9825,
  "fabric_utilization": 0.4569,
  "remote_read_bytes": 258342912, "migration_bytes": 66322432,
@@ -107,13 +107,18 @@ on failed runs; `error` carries the divergence message. 404 for unknown ids.
 
 One row per sampling tick, ascending `t_ns`. Counters are per-window deltas;
 occupancy/bytes are point-in-time. Default cap 2000 points (deterministic
-stride sampling). There is **no per-window latency** — render latency only
-from `summary.access.latency_ns`.
+stride sampling). `latency_ns` is the recorded steady-state read-latency
+distribution for that window (same histogram as
+`summary.access.latency_ns`, same percentiles); windows with `count` 0
+(warmup/idle) carry no measurement — render a gap, never a zero line.
+Runs created before this field existed omit it entirely.
 
 ```json
 {"t_ns": 10000000, "accesses": 0, "evictions": 0, "completed": 0,
  "local_used_pages": {"node-0": 0}, "pool_used_pages": 0,
- "pools_used_pages": {"remote-pool": 0}, "link_bytes": {"node-0-cxl": 0}}
+ "pools_used_pages": {"remote-pool": 0}, "link_bytes": {"node-0-cxl": 0},
+ "latency_ns": {"count": 0, "mean": 0.0, "min": 0.0, "max": 0.0,
+  "p50": 0.0, "p95": 0.0, "p99": 0.0}}
 ```
 
 ### `GET /runs/{id}/events?…` → `{events[], next_cursor?, summary_only}`

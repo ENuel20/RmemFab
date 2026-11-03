@@ -200,6 +200,7 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
                 <th>Seed</th>
                 <th>Virtual Duration</th>
                 <th>p50 Latency</th>
+                <th>p95 Latency</th>
                 <th>p99 Latency</th>
                 <th>Remote Hit %</th>
                 <th>Fabric Util</th>
@@ -210,7 +211,7 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
             <tbody>
               {filteredRuns.length === 0 ? (
                 <tr>
-                  <td colSpan={12} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                  <td colSpan={13} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
                     No simulation runs match the selected filters.
                   </td>
                 </tr>
@@ -264,6 +265,9 @@ export const SimulationRunsView: React.FC<SimulationRunsViewProps> = ({
                       </td>
                       <td className="tabular-nums" style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>
                         {formatNanoseconds(run.metrics.latency_ns.p50)}
+                      </td>
+                      <td className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                        {formatNanoseconds(run.metrics.latency_ns.p95)}
                       </td>
                       <td
                         className="tabular-nums"

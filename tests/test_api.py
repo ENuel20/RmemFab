@@ -209,6 +209,19 @@ class ApiContract(unittest.TestCase):
                          detail["access"]["remote_hit_ratio"])
         utils = [v["utilization"] for v in detail["links"].values()]
         self.assertEqual(row["fabric_utilization"], max(utils))
+        for key in ("p50", "p95", "p99"):
+            self.assertIn(key, row)
+            self.assertEqual(row[key],
+                             detail["access"]["latency_ns"][key])
+
+    def test_runs_list_strip_carries_tail_latency(self):
+        rid = self._submit(tiny_synth(policy="swap_remote"))["run_id"]
+        rows = self.c.get("/runs").json()
+        row = next(r for r in rows if r["run_id"] == rid)
+        lat = self.c.get(f"/runs/{rid}").json()["summary"]["access"]["latency_ns"]
+        for key in ("p99", "mean", "max"):
+            self.assertIn(key, row)
+            self.assertEqual(row[key], lat[key])
 
     def test_series_decimation(self):
         rid = self._submit(tiny_synth())["run_id"]

@@ -32,6 +32,9 @@ test('1. validateRunSummary validates compliant RunSummary object', () => {
     rejected: 0,
     p50: 445.66,
     p95: 445.66,
+    p99: 892.10,
+    mean: 441.20,
+    max: 1500.0,
     local_hit_ratio: 0.0175,
     remote_hit_ratio: 0.9825,
     fabric_utilization: 0.4569,
@@ -45,6 +48,9 @@ test('1. validateRunSummary validates compliant RunSummary object', () => {
   assert.equal(validated.status, 'completed')
   assert.equal(validated.seed, 7)
   assert.equal(validated.p50, 445.66)
+  assert.equal(validated.p99, 892.10)
+  assert.equal(validated.mean, 441.20)
+  assert.equal(validated.max, 1500.0)
   assert.equal(validated.local_hit_ratio, 0.0175)
   assert.equal(validated.remote_hit_ratio, 0.9825)
   assert.equal(validated.fabric_utilization, 0.4569)
@@ -135,6 +141,24 @@ test('5. validateSeriesPoints validates compliant series and rejects missing cou
   const result = validateSeriesPoints(validSeries, 'run-123')
   assert.equal(result.length, 1)
   assert.equal(result[0].t_ns, 10000000)
+  // latency_ns absent on old runs: stays undefined, never synthesized
+  assert.equal(result[0].latency_ns, undefined)
+
+  const withLatency = [
+    {
+      t_ns: 20000000,
+      accesses: 10,
+      evictions: 0,
+      completed: 10,
+      local_used_pages: { 'node-0': 5 },
+      pool_used_pages: 15,
+      link_bytes: {},
+      latency_ns: { count: 4, mean: 150, p50: 120, p95: 280, p99: 300 }
+    }
+  ]
+  const withResult = validateSeriesPoints(withLatency, 'run-123')
+  assert.equal(withResult[0].latency_ns?.count, 4)
+  assert.equal(withResult[0].latency_ns?.p99, 300)
 
   // Non-array
   assert.throws(() => validateSeriesPoints({ points: [] }, 'run-123'), ContractError)

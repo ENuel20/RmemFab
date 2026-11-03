@@ -204,6 +204,9 @@ class Engine:
         self.m_all, self.m_ss = Metrics(), Metrics()
         self.req_hist = Histogram()
         self.req_hist_all = Histogram()
+        # Window-scoped read-latency histogram: same steady-state stream as
+        # m_ss, snapshotted into each series row by _sample() and reset.
+        self.win_read = Histogram()
         self.arrived = self.completed = self.rejected = 0
         self.stalled_requests = 0
         self.completed_ss = 0
@@ -293,6 +296,7 @@ class Engine:
         if now >= self.sc.warmup_ns:
             self.m_ss.record_reads(lats, **kw)
             node.m_ss.record_reads(lats, **kw)
+            self.win_read.add(lats)
 
     def _record_writes(self, now, node, lats, **kw):
         self.m_all.record_writes(lats, **kw)
@@ -898,7 +902,9 @@ class Engine:
                "local_used_pages": {n.id: n.used for n in self.nodes},
                "pool_used_pages": sum(p.used for p in self.pools.values()),
                "pools_used_pages": {pid: p.used for pid, p in self.pools.items()},
-               "link_bytes": {}}
+               "link_bytes": {},
+               "latency_ns": self.win_read.stats(self.sc.percentiles)}
+        self.win_read = Histogram()
         self._last_sample = {"accesses": ops, "evictions": c["evictions"], "completed": self.completed}
         if self.fabric:
             for lid in self.fabric.dir_bytes:
