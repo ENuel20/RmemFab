@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
@@ -156,17 +158,27 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
     versions_dir.mkdir(parents=True, exist_ok=True)
 
     app = FastAPI(title="RmemFab Run API", version=__version__)
-    app.add_middleware(CORSMiddleware, allow_origins=["*"],
+    cors_origins = [o.strip() for o in os.environ.get(
+        "RMEMFAB_CORS_ORIGINS",
+        "http://127.0.0.1:5173,http://localhost:5173").split(",") if o.strip()]
+    if "*" in cors_origins and os.environ.get("RMEMFAB_API_TOKEN"):
+        raise RuntimeError("refusing CORS '*' with RMEMFAB_API_TOKEN set")
+    app.add_middleware(CORSMiddleware, allow_origins=cors_origins,
                        allow_methods=["*"], allow_headers=["*"])
 
     def _load_version(v: str) -> dict:
-        p = versions_dir / f"{v}.json"
-        if not p.is_file():
-            raise HTTPException(404, f"unknown scenario version {v!r}")
+        # Version ids are content hashes written by this server. Resolve before
+        # touching the filesystem so request input cannot traverse elsewhere.
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", v or ""):
+            raise HTTPException(400, "invalid scenario version")
+        base = versions_dir.resolve()
+        p = (base / f"{v}.json").resolve()
+        if p.parent != base or p.suffix != ".json" or not p.is_file():
+            raise HTTPException(404, "unknown scenario version")
         try:
             return json.loads(p.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            raise HTTPException(500, f"cannot read scenario version {v!r}")
+            raise HTTPException(500, "cannot read scenario version")
 
     @app.get("/health")
     def health():
@@ -318,10 +330,20 @@ def create_app(runs_dir="runs", traces_dir="traces/uploads",
 
     @app.post("/traces")
     async def traces_upload(file: UploadFile = File(...)):
-        data = await file.read()
-        if len(data) > traces.max_bytes:
-            raise HTTPException(
-                413, f"trace is {len(data)} bytes; cap is {traces.max_bytes}")
+        # Bound the read while consuming the upload; do not slurp an oversized
+        # request before enforcing the cap.
+        chunks, total = [], 0
+        fh = getattr(file, "file", None)
+        while True:
+            chunk = fh.read(1024 * 1024) if fh is not None else await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > traces.max_bytes:
+                raise HTTPException(
+                    413, f"trace exceeds cap of {traces.max_bytes} bytes")
+            chunks.append(chunk)
+        data = b"".join(chunks)
         trace_id, path = traces.save(file.filename or "upload.jsonl", data)
         try:
             vt = load_trace(path)

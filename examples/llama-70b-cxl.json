@@ -238,10 +238,7 @@
     "name": "hot_cold",
     "params": {
       "hot_threshold": 8,
-      "cold_threshold": 1,
-      "tick_ns": 1000000,
-      "min_residency_ns": 10000000,
-      "max_migrations_per_tick": 64
+      "cold_threshold": 1
     }
   },
   "faults": {

@@ -84,9 +84,11 @@ class MemoryPolicy:
     def choose_tier(self, candidates: list) -> str:
         """Pick a destination tier for spill/evict migration. Each candidate
         is (tier_id, kind, free_pages, hops, path_latency_ns) with kind in
-        {"pool", "peer"}. Default: nearest by (hops, latency, id) — the
-        cheapest reachable home. Override to optimize destination choice."""
-        return min(candidates, key=lambda c: (c[3], c[4], c[0]))[0]
+        {"pool", "peer"}. Default: nearest tier that still has space; only
+        fall back to a full tier if every reachable candidate is full."""
+        spaced = [c for c in candidates if c[2] > 0]
+        choices = spaced or candidates
+        return min(choices, key=lambda c: (c[3], c[4], c[0]))[0]
 
 
 _REGISTRY: dict = {}

@@ -256,6 +256,17 @@ class ReplayEngine:
             freed += self.pages[pid][3]
         return out
 
+    def _trim_to_pages(self, pids, need_pages, exclude=None):
+        out, freed = [], 0
+        for pid in pids:
+            if pid == exclude:
+                continue
+            out.append(pid)
+            freed += self.pages[pid][3]
+            if freed >= need_pages:
+                break
+        return out
+
     def _evict_pages(self, node, pids, now, request_id, cause, dst):
         if not pids:
             return 0, 0
@@ -304,9 +315,9 @@ class ReplayEngine:
                 raise ReplayDivergence(
                     f"row {row}: {d.reason} (alloc {pid}, {npages} pages, "
                     f"{free} local free, {remote_free} remote free)")
-            victims = self._victims(node, need)
+            victims = self._trim_to_pages(self._victims(node, need), need)
             freed = sum(self.pages[p][3] for p in victims)
-            dst = self._choose_dst(node, freed or need, require_space=False)
+            dst = self._choose_dst(node, need, require_space=True) if freed >= need else None
             if isinstance(d, EvictToRemote) and freed >= need and dst is not None:
                 n, _ = self._evict_pages(node, victims, now, request_id,
                                          "allocation_pressure", dst)
@@ -391,11 +402,13 @@ class ReplayEngine:
             if need <= 0:
                 install = npages
             else:
-                victims = [p for p in self._victims(node, need) if p != pid]
+                victims = self._trim_to_pages(self._victims(node, need), need, exclude=pid)
                 freed = sum(self.pages[p][3] for p in victims)
-                if freed >= need:
-                    vict_dst = self._choose_dst(node, freed, require_space=False)
-                if freed >= need and vict_dst is not None:
+                room = min(need, freed)
+                if freed >= need and room:
+                    vict_dst = self._choose_dst(node, room, require_space=True)
+                    victims = self._trim_to_pages(victims, room, exclude=pid)
+                if freed >= need and room and vict_dst is not None:
                     n, _ = self._evict_pages(node, victims, now, request_id,
                                              "fetch_install", vict_dst)
                     vict_n = n
@@ -490,11 +503,14 @@ class ReplayEngine:
                 if isinstance(d, Reject):
                     self.pref_skipped += 1
                     continue
-                victims = [p for p in self._victims(node, need) if p != cand]
+                victims = self._trim_to_pages(self._victims(node, need), need, exclude=cand)
                 freed = sum(self.pages[p][3] for p in victims)
-                if freed >= need:
-                    vict_dst = self._choose_dst(node, freed, require_space=False)
-                if freed < need or vict_dst is None:
+                room = min(need, freed)
+                vict_dst = None
+                if freed >= need and room:
+                    vict_dst = self._choose_dst(node, room, require_space=True)
+                    victims = self._trim_to_pages(victims, room, exclude=cand)
+                if freed < need or room == 0 or vict_dst is None:
                     self.pref_skipped += 1
                     continue
                 n, _ = self._evict_pages(node, victims, now, request_id,
