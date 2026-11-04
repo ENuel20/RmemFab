@@ -69,6 +69,6 @@ guard refuse (different fabric). Full catalog with measured numbers:
 ## Links
 
 - Repo: https://github.com/ENuel20/RmemFab
-- Live demo: [MODAL_URL — paste after `modal deploy deploy/modal_app.py`]
+- Live demo: https://emmaonana18--rmemfab-demo-serve.us-east.modal.run/
 - Demo video: [LINK, <3 min per docs/04-demo-script.md]
 - Run catalog: docs/05-test-runs.md · Test log: docs/03-test-drive.md

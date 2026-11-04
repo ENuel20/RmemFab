@@ -13,6 +13,35 @@ RmemFab gives infrastructure engineers a fast, reproducible sandbox for answerin
 
 Instead of standing up a disaggregated cluster for every experiment, describe the system in a scenario file, run the simulation, and compare policies under identical conditions.
 
+> **Live demo:** https://emmaonana18--rmemfab-demo-serve.us-east.modal.run/ — dashboard + API, pre-seeded runs, no install. (First load takes ~30s while the container wakes.)
+
+## Quickstart (verified)
+
+```bash
+git clone https://github.com/ENuel20/RmemFab.git
+cd RmemFab
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e '.[api]'        # needs network for dependencies
+
+rmemfab validate examples/phase1-overflow.json
+rmemfab run examples/phase1-overflow.json --out /tmp/rmemfab-quickstart
+make dev                       # API + dashboard on http://127.0.0.1:8000
+```
+
+Open `http://127.0.0.1:8000` in a browser: the dashboard is served from
+the same URL as the API (single process). For dashboard development
+with live reload, use `cd dashboard && npm run dev` (`:5173`) instead.
+
+Useful next steps:
+
+- `make test` — backend + dashboard suites (must stay green).
+- `rmemfab compare <bundle-a> <bundle-b>` — guarded policy comparison
+  (refuses unless same seed + identical scenario except policy).
+- `rmemfab trace-validate <trace.jsonl>` — replay-contract check; the
+  dashboard Trace Library view uploads and profiles traces the same way.
+- Assistant features (NL draft, grounded chat) need a Baseten key in
+  `.env` (gitignored); everything else runs fully offline.
+
 ---
 
 ## The problem
@@ -222,33 +251,6 @@ The core engine, API, and dashboard directories will be added as implementation 
 4. **Measured traces over guesses.** Synthetic profiles are useful; captured traces are better. Both are supported and labeled.
 5. **Everything is configurable.** Latency, bandwidth, page size, queue depth, failure rates, and policy parameters live in the scenario, not in code.
 6. **Explain the result.** Every metric should be traceable to an event and a parameter.
-
-## Quickstart (verified)
-
-```bash
-git clone https://github.com/ENuel20/RmemFab.git
-cd RmemFab
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e '.[api]'        # needs network for dependencies
-
-rmemfab validate examples/phase1-overflow.json
-rmemfab run examples/phase1-overflow.json --out /tmp/rmemfab-quickstart
-make dev                       # API + dashboard on http://127.0.0.1:8000
-```
-
-Open `http://127.0.0.1:8000` in a browser: the dashboard is served from
-the same URL as the API (single process). For dashboard development
-with live reload, use `cd dashboard && npm run dev` (`:5173`) instead.
-
-Useful next steps:
-
-- `make test` — backend + dashboard suites (must stay green).
-- `rmemfab compare <bundle-a> <bundle-b>` — guarded policy comparison
-  (refuses unless same seed + identical scenario except policy).
-- `rmemfab trace-validate <trace.jsonl>` — replay-contract check; the
-  dashboard Trace Library view uploads and profiles traces the same way.
-- Assistant features (NL draft, grounded chat) need a Baseten key in
-  `.env` (gitignored); everything else runs fully offline.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for milestones and
 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) for acceptance criteria.
