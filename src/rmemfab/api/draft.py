@@ -41,6 +41,13 @@ generated_tokens}} or {type: "trace", path} where path is server-visible.
 
 policy: {name} with name in local_only, swap_remote, hot_cold,
 frequency_aware, predictive_prefetch, plus optional params{}.
+Valid params per policy (omit params entirely for defaults):
+hot_cold{k>=1, hot_threshold, cold_threshold} with
+0 <= cold_threshold < hot_threshold (defaults k=2, hot=3, cold=1);
+frequency_aware{k>=1} (default k=2);
+predictive_prefetch{degree>=1, stride!=0, max_in_flight>=1}
+(defaults degree=1, stride=1, max_in_flight=64);
+local_only and swap_remote take NO params. Never invent param names.
 
 Units are bytes, nanoseconds, bytes/ns. Never invent fields: the schema
 rejects unknown properties. When a parent scenario is supplied, change as

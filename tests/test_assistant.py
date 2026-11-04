@@ -111,6 +111,12 @@ class AssistantContract(unittest.TestCase):
         self.assertIn("percentiles", SYSTEM)
         self.assertIn("sample_interval_ns", SYSTEM)
 
+    def test_draft_system_names_policy_params(self):
+        from rmemfab.api.draft import SYSTEM
+        self.assertIn("cold_threshold", SYSTEM)
+        self.assertIn("hot_threshold", SYSTEM)
+        self.assertIn("max_in_flight", SYSTEM)
+
     def test_draft_escalates_tokens_on_empty_content(self):
         calls = []
 

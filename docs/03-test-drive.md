@@ -297,3 +297,13 @@ before its test passes.
   still 502 honestly. 2 new backend tests; assistant+API 49/49.
 - Pitch line: "When the model thinks too long, the server gives it
   more room instead of giving you an error."
+
+## Detour 8 — draft invented hot_cold params (prompt now teaches them)
+- Ambitious MoE draft failed on `policy.params: hot_cold needs
+  k >= 1 and 0 <= cold_threshold < hot_threshold` — and the repair
+  turn couldn't fix it, because SYSTEM never described any policy's
+  params. Prompt now names every policy's valid params + defaults
+  and says local_only/swap_remote take none. 1 new backend test;
+  assistant+API 50/50.
+- Pitch line: "The model stopped guessing knobs once we told it the
+  knobs exist."
