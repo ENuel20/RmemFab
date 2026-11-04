@@ -538,9 +538,9 @@ class Engine:
                 vict = self._victims(node, need, (r, ci), now)
                 avail = sum(int(i.size) for _, i in vict)
                 if avail:
-                    dst = self._choose_dst(node, avail, require_space=False)
+                    dst = self._choose_dst(node, need, require_space=True)
                     if dst is None:
-                        return False, "no remote tier reachable for eviction"
+                        return False, "no remote tier fits eviction"
                     evicted = self._evict_batch(node, self._trim(vict, need), now, r.id,
                                                "allocation_pressure", dst)
                     self.tiers[dst].set_used(now, self.tiers[dst].used + evicted)
@@ -769,13 +769,14 @@ class Engine:
                     if need > 0:
                         vict = self._victims(node, need, (r, ci), now)
                         avail = sum(int(i.size) for _, i in vict)
-                        if avail:
-                            vict_dst = self._choose_dst(node, avail, require_space=False)
+                        room = max(0, min(need, avail))
+                        if room:
+                            vict_dst = self._choose_dst(node, room, require_space=True)
                             if vict_dst is not None:
-                                vict = self._trim(vict, min(need, avail))
+                                vict = self._trim(vict, room)
                                 vict_n = sum(int(i.size) for _, i in vict)
                                 self._evict_batch(node, vict, now, r.id, "fetch_install", vict_dst)
-                    install = min(len(want), free + vict_n)
+                    install = max(0, min(len(want), free + vict_n))
                     inst_rel = np.asarray([int(i) for i in want[:install]], dtype=np.int64)
                 # Remote pages may live on different tiers: fetch per home tier.
                 by_home: dict = {}
