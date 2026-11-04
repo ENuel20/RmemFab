@@ -14,6 +14,8 @@ RmemFab gives infrastructure engineers a fast, reproducible sandbox for answerin
 Instead of standing up a disaggregated cluster for every experiment, describe the system in a scenario file, run the simulation, and compare policies under identical conditions.
 
 > **Live demo:** https://emmaonana18--rmemfab-demo-serve.us-east.modal.run/ — dashboard + API, pre-seeded runs, no install. (First load takes ~30s while the container wakes.)
+>
+> **Deployment:** [Modal dashboard — rmemfab-demo](https://modal.com/apps/emmaonana18/main/deployed/rmemfab-demo) (build logs, container status, redeploy history).
 
 ## Quickstart (verified)
 
