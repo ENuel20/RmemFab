@@ -12,6 +12,8 @@ RmemFab gives infrastructure engineers a fast, reproducible sandbox for answerin
 - How gracefully does the system degrade when a memory node or fabric link fails?
 
 Instead of standing up a disaggregated cluster for every experiment, describe the system in a scenario file, run the simulation, and compare policies under identical conditions.
+<img width="2881" height="1849" alt="image" src="https://github.com/user-attachments/assets/1d8a6767-b391-4edf-b3d2-a37ffe629899" />
+
 
 > **Live demo:** https://emmaonana18--rmemfab-demo-serve.us-east.modal.run/ — dashboard + API, pre-seeded runs, no install. (First load takes ~30s while the container wakes.)
 >
