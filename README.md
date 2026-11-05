@@ -18,8 +18,7 @@ Instead of standing up a disaggregated cluster for every experiment, describe th
 
 
 > **Live demo:** https://emmaonana18--rmemfab-demo-serve.us-east.modal.run/ — dashboard + API, pre-seeded runs, no install. (First load takes ~30s while the container wakes.)
->
-> **Deployment:** [Modal dashboard — rmemfab-demo](https://modal.com/apps/emmaonana18/main/deployed/rmemfab-demo) (build logs, container status, redeploy history).
+
 
 ## Quickstart (verified)
 
